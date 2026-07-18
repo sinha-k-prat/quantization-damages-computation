@@ -1,0 +1,24 @@
+building vocab...
+vocab 162 · 4.32M params
+step     0 L1 | train c 5.079 o 5.135 | OOD-EM c 0.000 o 0.000
+step   500 L1 | train c 0.012 o 0.043 | OOD-EM c 0.583 o 0.675
+step  1000 L1 | train c 0.005 o 0.019 | OOD-EM c 0.508 o 0.625
+step  1500 L2 | train c 0.056 o 0.066 | OOD-EM c 0.842 o 0.792
+step  2000 L2 | train c 0.016 o 0.018 | OOD-EM c 0.842 o 0.867
+step  2500 L3 | train c 0.059 o 0.048 | OOD-EM c 0.900 o 0.967
+step  3000 L3 | train c 0.028 o 0.020 | OOD-EM c 0.908 o 0.983
+step  3500 L3 | train c 0.021 o 0.013 | OOD-EM c 0.875 o 0.942
+step  4000 L4 | train c 0.077 o 0.096 | OOD-EM c 0.992 o 1.000
+step  4500 L4 | train c 0.061 o 0.095 | OOD-EM c 0.975 o 1.000
+step  5000 L5 | train c 0.086 o 0.091 | OOD-EM c 0.983 o 0.983
+step  5500 L5 | train c 0.045 o 0.087 | OOD-EM c 0.992 o 1.000
+step  6000 L5 | train c 0.062 o 0.080 | OOD-EM c 1.000 o 1.000
+step  6500 L5 | train c 0.035 o 0.048 | OOD-EM c 1.000 o 1.000
+step  7000 L5 | train c 0.025 o 0.040 | OOD-EM c 0.992 o 1.000
+step  7500 L5 | train c 0.021 o 0.045 | OOD-EM c 0.992 o 1.000
+step  8000 L5 | train c 0.043 o 0.067 | OOD-EM c 1.000 o 1.000
+step  8500 L5 | train c 0.030 o 0.028 | OOD-EM c 0.992 o 0.983
+step  9000 L5 | train c 0.025 o 0.054 | OOD-EM c 1.000 o 0.975
+step  9500 L5 | train c 0.025 o 0.024 | OOD-EM c 0.992 o 1.000
+step 10000 L5 | train c 0.031 o 0.027 | OOD-EM c 1.000 o 1.000
+DONE

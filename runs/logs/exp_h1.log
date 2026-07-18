@@ -1,0 +1,57 @@
+[ 1/42] crush L0.q      compute++0.0492  lookup++0.0131
+[ 2/42] crush L0.k      compute++0.0574  lookup++0.0061
+[ 3/42] crush L0.v      compute++0.0586  lookup++0.0106
+[ 4/42] crush L0.o      compute++0.1117  lookup++0.0270
+[ 5/42] crush L0.gate   compute++0.0540  lookup++0.0465
+[ 6/42] crush L0.up     compute++0.0330  lookup++0.0141
+[ 7/42] crush L0.down   compute++0.0865  lookup++0.1029
+[ 8/42] crush L1.q      compute++0.0028  lookup++0.0000
+[ 9/42] crush L1.k      compute++0.0054  lookup++0.0000
+[10/42] crush L1.v      compute++0.2134  lookup++0.0499
+[11/42] crush L1.o      compute++0.1994  lookup++0.0381
+[12/42] crush L1.gate   compute++0.0873  lookup++0.0006
+[13/42] crush L1.up     compute++0.0916  lookup++0.0003
+[14/42] crush L1.down   compute++0.0913  lookup++0.0010
+[15/42] crush L2.q      compute++0.0064  lookup++0.0000
+[16/42] crush L2.k      compute++0.0039  lookup++0.0000
+[17/42] crush L2.v      compute++0.0983  lookup++0.0021
+[18/42] crush L2.o      compute++0.0956  lookup++0.0026
+[19/42] crush L2.gate   compute+-0.0030  lookup++0.0000
+[20/42] crush L2.up     compute+-0.0042  lookup++0.0000
+[21/42] crush L2.down   compute+-0.0021  lookup++0.0000
+[22/42] crush L3.q      compute++0.0027  lookup+-0.0000
+[23/42] crush L3.k      compute++0.0015  lookup++0.0004
+[24/42] crush L3.v      compute++0.0554  lookup++0.0092
+[25/42] crush L3.o      compute++0.0550  lookup++0.0049
+[26/42] crush L3.gate   compute++0.0023  lookup++0.0000
+[27/42] crush L3.up     compute+-0.0006  lookup++0.0000
+[28/42] crush L3.down   compute++0.0011  lookup++0.0001
+[29/42] crush L4.q      compute++0.0012  lookup++0.0001
+[30/42] crush L4.k      compute++0.0007  lookup++0.0000
+[31/42] crush L4.v      compute++0.0785  lookup++0.0048
+[32/42] crush L4.o      compute++0.0792  lookup++0.0034
+[33/42] crush L4.gate   compute++0.0014  lookup++0.0003
+[34/42] crush L4.up     compute++0.0027  lookup++0.0010
+[35/42] crush L4.down   compute++0.0057  lookup++0.0020
+[36/42] crush L5.q      compute+-0.0003  lookup++0.0001
+[37/42] crush L5.k      compute+-0.0003  lookup++0.0001
+[38/42] crush L5.v      compute++0.0144  lookup++0.0012
+[39/42] crush L5.o      compute++0.0089  lookup++0.0010
+[40/42] crush L5.gate   compute++0.0040  lookup++0.0001
+[41/42] crush L5.up     compute++0.0031  lookup++0.0000
+[42/42] crush L5.down   compute++0.0039  lookup++0.0002
+
+=== class-average elasticity (CE rise when crushed to 1-bit) ===
+class   compute skills  lookup skills  ratio c/l
+q               0.0103         0.0022        4.7
+k               0.0114         0.0011       10.2
+v               0.0865         0.0130        6.7
+o               0.0916         0.0128        7.1
+gate            0.0244         0.0079        3.1
+up              0.0209         0.0026        8.1
+down            0.0311         0.0177        1.8
+
+components where crushing hurts COMPUTE > LOOKUP: 35/42
+corr(elasticity, weight-magnitude) = -0.15  (low => elasticity is NOT just magnitude)
+
+saved runs/exp_h1.png

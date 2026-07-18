@@ -1,0 +1,9 @@
+=== Exp E-a: explicit(identity) vs implicit(recall+bind) identification ===
+
+EXPLICIT id (pos of named anchor)      in-dist (len 8-12)   control  0.829  target  0.859  gap +0.0302  n=400
+EXPLICIT id (pos of named anchor)      OOD (len 13-20)      control  5.769  target  5.594  gap -0.1744  n=400
+
+IMPLICIT id (shape-selected object)    in-dist (len 8-12)   control  0.602  target  0.607  gap +0.0054  n=400
+IMPLICIT id (shape-selected object)    OOD (len 13-20)      control  1.401  target  1.927  gap +0.5253  n=400
+
+saved runs/exp_ea.png

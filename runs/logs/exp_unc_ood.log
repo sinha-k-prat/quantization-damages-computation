@@ -1,0 +1,56 @@
+baseline (all-quant) per-skill CE: {'index': 0.5868, 'filter': nan, 'semantic': 0.009, 'relative': 1.0363, 'content': 0.3541, 'read': 0.0126}
+[ 1/42] un-cluster L0.q      | relative -0.0041  content -0.0039
+[ 2/42] un-cluster L0.k      | relative +0.0248  content +0.0028
+[ 3/42] un-cluster L0.v      | relative -0.0124  content +0.0028
+[ 4/42] un-cluster L0.o      | relative -0.0321  content +0.0000
+[ 5/42] un-cluster L0.gate   | relative +0.0136  content +0.0008
+[ 6/42] un-cluster L0.up     | relative +0.0098  content +0.0022
+[ 7/42] un-cluster L0.down   | relative +0.0224  content +0.0066
+[ 8/42] un-cluster L1.q      | relative +0.0095  content +0.0015
+[ 9/42] un-cluster L1.k      | relative -0.0076  content -0.0031
+[10/42] un-cluster L1.v      | relative -0.0052  content -0.0054
+[11/42] un-cluster L1.o      | relative -0.0052  content -0.0053
+[12/42] un-cluster L1.gate   | relative -0.0086  content -0.0007
+[13/42] un-cluster L1.up     | relative -0.0014  content +0.0011
+[14/42] un-cluster L1.down   | relative -0.0104  content -0.0001
+[15/42] un-cluster L2.q      | relative -0.0051  content -0.0009
+[16/42] un-cluster L2.k      | relative -0.0058  content -0.0011
+[17/42] un-cluster L2.v      | relative -0.0128  content -0.0010
+[18/42] un-cluster L2.o      | relative -0.0149  content -0.0018
+[19/42] un-cluster L2.gate   | relative -0.0034  content +0.0001
+[20/42] un-cluster L2.up     | relative -0.0052  content -0.0003
+[21/42] un-cluster L2.down   | relative +0.0003  content +0.0001
+[22/42] un-cluster L3.q      | relative -0.0032  content -0.0009
+[23/42] un-cluster L3.k      | relative +0.0043  content -0.0013
+[24/42] un-cluster L3.v      | relative +0.0023  content -0.0062
+[25/42] un-cluster L3.o      | relative -0.0029  content -0.0087
+[26/42] un-cluster L3.gate   | relative +0.0032  content -0.0012
+[27/42] un-cluster L3.up     | relative +0.0001  content -0.0005
+[28/42] un-cluster L3.down   | relative -0.0021  content -0.0012
+[29/42] un-cluster L4.q      | relative +0.0007  content -0.0005
+[30/42] un-cluster L4.k      | relative -0.0087  content +0.0000
+[31/42] un-cluster L4.v      | relative -0.0110  content -0.0015
+[32/42] un-cluster L4.o      | relative -0.0152  content +0.0001
+[33/42] un-cluster L4.gate   | relative +0.0012  content -0.0013
+[34/42] un-cluster L4.up     | relative -0.0032  content -0.0017
+[35/42] un-cluster L4.down   | relative -0.0058  content -0.0023
+[36/42] un-cluster L5.q      | relative -0.0001  content -0.0003
+[37/42] un-cluster L5.k      | relative +0.0003  content +0.0006
+[38/42] un-cluster L5.v      | relative +0.0073  content -0.0024
+[39/42] un-cluster L5.o      | relative +0.0072  content -0.0021
+[40/42] un-cluster L5.gate   | relative -0.0017  content -0.0009
+[41/42] un-cluster L5.up     | relative +0.0006  content -0.0020
+[42/42] un-cluster L5.down   | relative +0.0119  content +0.0032
+
+=== 3a: top components whose un-clustering RECOVERS each fragile skill ===
+  relative : L0.k(+0.025), L0.down(+0.022), L0.gate(+0.014), L5.down(+0.012), L0.up(+0.010)
+  content  : L0.down(+0.007), L5.down(+0.003), L0.v(+0.003), L0.k(+0.003), L0.up(+0.002)
+  index    : L0.gate(+0.009), L0.down(+0.007), L0.up(+0.004), L4.down(+0.004), L5.o(+0.003)
+
+=== 2a: un-cluster by WEIGHT CLASS — per-skill recovery ===
+class               index    filte    seman    relat    conte     read
+Q/K (routing)     -0.0676     +nan  +0.0004  -0.0029  -0.0071  -0.0152
+V/O (payload)     -0.0572     +nan  -0.0074  -0.1027  -0.0328  -0.0170
+MLP (compute)     +0.0229     +nan  -0.0051  +0.0035  +0.0039  -0.0318
+
+saved runs/exp3a_ood.png, runs/exp2a_ood.png

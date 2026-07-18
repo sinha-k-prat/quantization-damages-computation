@@ -1,0 +1,12 @@
+=== Exp E-b: recall as the fragile ingredient (each at NATIVE length) ===
+
+T1 in-dist  len3-5   control  0.001 target  0.000 gap -0.0002 n=400
+T1 OOD      len6-9   control  6.655 target  7.503 gap +0.8479 n=400
+
+T3 in-dist  len5-6   control  0.064 target  0.055 gap -0.0089 n=400
+T3 OOD      len7-10  control  1.948 target  2.446 gap +0.4985 n=400
+
+T4 in-dist  len6-7   control  0.127 target  0.132 gap +0.0049 n=400
+T4 OOD      len8-11  control  0.467 target  0.558 gap +0.0911 n=400
+
+saved runs/exp_eb.png
