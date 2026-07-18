@@ -3,12 +3,38 @@ body{font:16px/1.7 -apple-system,sans-serif;max-width:800px;margin:0 auto;paddin
 h1{font-size:25px;line-height:1.25} h2{font-size:20px;margin-top:1.8em;border-bottom:2px solid #c9a227;padding-bottom:4px}
 h3{font-size:16px;color:#333} code{background:#eee;padding:1px 4px;border-radius:3px;font-size:.88em}
 blockquote{border-left:4px solid #c9a227;background:#f7f2e8;margin:1em 0;padding:8px 16px;border-radius:5px}
-table{border-collapse:collapse;width:100%;font-size:13.5px;margin:1em 0} td,th{border:1px solid #ddd;padding:5px 9px;text-align:left} th{background:#f3efe6}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:1em 0} td,th{border:1px solid #ddd;padding:5px 9px;text-align:left;vertical-align:top} th{background:#f3efe6}
 figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px;margin-top:4px}
 hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <h1>Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe</h1>
 
-<p><i>Working draft — NeurIPS-target. Single-seed controlled study on a mechanistic testbed; figures in <code>runs/</code>, exact numbers in <code>runs/RESULTS.md</code>.</i></p>
+<p><i>Working draft. Single-seed controlled study on a mechanistic testbed; figures in <code>runs/</code>, exact numbers in <code>runs/RESULTS.md</code>.</i></p>
+
+<h2>Executive summary (for a general and policy audience)</h2>
+
+<p><b>The problem — a governance blind spot.</b> To run cheaply and on-device, AI models are <i>compressed</i></p>
+<p>(quantized). This is done almost universally, yet what compression does to a model&#x27;s specific <i>abilities</i></p>
+<p>is undocumented: standard tests report an average accuracy, not which skills survived. A compressed model</p>
+<p>can look &quot;97% as good&quot; while having quietly lost a capability that matters.</p>
+
+<p><b>What we do.</b> On a model small enough to dissect completely, we measure compression&#x27;s effect</p>
+<p>skill-by-skill and locate where each skill lives inside the network. We find that compression **spares</p>
+<p>memory and recall but damages multi-step computation<i>*, that this is fundamentally an </i>extrapolation*</p>
+<p>failure (it breaks when the model must compute beyond what it practiced), and that both effects</p>
+<p>concentrate in a specific, identifiable part of the network. We then turn the method into a cheap probe</p>
+<p>that maps <b>which internal circuits carry which skills</b> — making the effect of compression *auditable</p>
+<p>before deployment*.</p>
+
+<p><b>Why it matters for trustworthy AI.</b> This turns an opaque efficiency step into a transparent,</p>
+<p>documentable one (which capabilities changed, and where), lets an operator <i>predict the failure surface</i></p>
+<p>(computation and long-context reasoning fail first) and <i>mitigate</i> it (keep reasoning-critical weights</p>
+<p>precise; route hard cases to the full model). It supplies the kind of transparency, robustness, and</p>
+<p>accountability evidence the OECD trustworthy-AI framework calls for; §7 maps each finding to the</p>
+<p>relevant OECD AI Principle.</p>
+
+<p><b>Honest scope.</b> This is a controlled proof-of-concept on a 4.3M-parameter model, single seed. It</p>
+<p>demonstrates a <i>method and a mechanism</i>, not a deployable assurance tool; a replication on a</p>
+<p>production-scale model is the identified next step.</p>
 
 <h2>Abstract</h2>
 
@@ -200,7 +226,34 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p><b>(P4)</b> Quantization regularizes at the tails (F3): it can improve in-distribution generalization while</p>
 <p>worsening extrapolation, so OOD-free evaluations misjudge which quantizer is safe for reasoning.</p>
 
-<h2>7. Limitations and scope</h2>
+<h2>7. Trustworthy-AI impact (alignment with the OECD AI Principles)</h2>
+
+<p>Compression is a <i>governance blind spot</i>: applied ubiquitously for efficiency, its effect on specific</p>
+<p>capabilities goes undocumented. Our method and probe supply evidence toward three of the five OECD AI</p>
+<p>Principles. (The Principles are values, not a certification; the concrete home for a tool like this is</p>
+<p>the OECD.AI <i>Catalogue of Tools &amp; Metrics for Trustworthy AI</i>, under transparency and robustness.)</p>
+
+<table><tr><th>OECD Principle</th><th>What our work contributes</th><th>Evidence</th></tr>
+<tr><td><b>Transparency &amp; Explainability</b></td><td>Circuit-level localization: <i>which weights load-bear which skills</i>, and <i>which capabilities a compression step changed and where</i> — a question no aggregate benchmark answers</td><td>F1, F2, F4; H1–H2 (the probe)</td></tr>
+<tr><td><b>Robustness, Security &amp; Safety</b></td><td>Predicts the <i>failure surface</i> before deployment: computation and out-of-distribution/long-context reasoning fail first, while recall is safe — enabling pre-deployment risk assessment aggregate accuracy hides</td><td>F1, F3</td></tr>
+<tr><td><b>Accountability</b></td><td>Localized, documented capability-deltas provide audit-trail evidence for model cards and impact assessments (what changed, attributable to which circuits)</td><td>F4, H1</td></tr>
+</table>
+
+<p><b>A concrete governance example.</b> A public agency plans to deploy a <i>quantized</i> language model to help</p>
+<p>triage benefit applications. Before deployment it runs the probe and finds that multi-step reasoning</p>
+<p>over long case histories is a fragile, computation-heavy circuit that degrades under 2-bit compression,</p>
+<p>while factual recall is untouched. The trustworthiness assessment can now document: *compression is safe</p>
+<p>for lookup-style tasks but degrades long-context reasoning; keep the reasoning-critical weight path in</p>
+<p>higher precision (function-guided mixed precision); route complex cases to the full-precision model.*</p>
+<p>That is a transparency + robustness + accountability decision the agency can defend — enabled by the</p>
+<p>tool, not by aggregate accuracy.</p>
+
+<p><b>Honest bound.</b> This supports the <i>transparency and robustness</i> slice of trustworthiness; it is not a</p>
+<p>fairness or societal-impact measure, and it is validated on a testbed (see §8). As a <i>tool aligned with</i></p>
+<p>the OECD Principles it is defensible today; as a <i>deployed governance instrument</i> it awaits the</p>
+<p>real-model replication.</p>
+
+<h2>8. Limitations and scope</h2>
 
 <p>We state these plainly. The testbed is a 4.32M synthetic model, one seed, one bit-width (k=4), one</p>
 <p>quantizer (our VQ, not GPTQ/AWQ). Absolute CE effects are small because the task is fully learned — the</p>
@@ -211,7 +264,7 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>we position this as the direct route from a controlled mechanistic result to production generality, and</p>
 <p>predict (P1–P4) what it should find.</p>
 
-<h2>8. Conclusion</h2>
+<h2>9. Conclusion</h2>
 
 <p>Three verdicts. Low-bit quantization damages <i>computation</i> and spares <i>retrieval</i> (Q1), in proportion to</p>
 <p>how far a computed quantity extrapolates beyond training (Q3), localized to the value/output path and</p>
