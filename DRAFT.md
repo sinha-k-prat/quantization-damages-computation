@@ -302,6 +302,21 @@ on-manifold ablation primitive, cleaner than zero-ablation.
 
 ![H2 — the elasticity map agrees with independent gradient importance on the fp32 model (ρ=0.55)](runs/exp_h2.png)
 
+**Clusterability vs. sensitivity — computation weights are not harder to compress.** A natural
+alternative explanation for skill-selectivity is that computation matrices are simply *harder to
+cluster* — their weights spread out, so 2-bit rounding discards more. We rule this out. The relative
+quantization error $\lVert W-\hat W\rVert/\lVert W\rVert$ is **remarkably uniform across all seven weight
+classes** (0.31–0.35, mean 0.33): every matrix has roughly-Gaussian rows and loses about a third of its
+energy to 2-bit rounding, whether it carries computation or lookup. The residual distributions of a
+*fragile* value matrix (`L1.v`) and a *robust* query matrix (`L0.q`) are essentially identical (below).
+Yet elasticity varies by **four orders of magnitude** across those same matrices. Fragility is therefore
+**not clusterability but sensitivity**: computation matrices compress *just as tightly*, but the function
+they implement amplifies the same relative weight error into a much larger loss change — consistent with
+the steep local gradients on Q/K and V/O in H2. (A weak residual trend survives, Spearman ρ = +0.43
+within the narrow error band, so clusterability contributes only marginally.)
+
+![Left: fragility (elasticity) spans 4 orders of magnitude while relative quantization error barely varies (0.31–0.35). Right: a fragile value matrix and a robust query matrix cluster equally tightly — their weight-to-centroid residuals are identical](runs/exp_cluster_tightness.png)
+
 ## 6. Implications for LLMs
 
 Testable, falsifiable predictions. **(P1)** Quantized LLMs keep facts (bounded-output recall) but lose

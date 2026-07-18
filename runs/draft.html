@@ -308,6 +308,21 @@ $$\mathrm{CE}_s=\frac{\sum_t \mathbb{1}[s_t=s]\,\text{ce}_t}{\sum_t \mathbb{1}[s
 
 <figure><img src="runs/exp_h2.png"><figcaption>H2 — the elasticity map agrees with independent gradient importance on the fp32 model (ρ=0.55)</figcaption></figure>
 
+<p><b>Clusterability vs. sensitivity — computation weights are not harder to compress.</b> A natural</p>
+<p>alternative explanation for skill-selectivity is that computation matrices are simply *harder to</p>
+<p>cluster* — their weights spread out, so 2-bit rounding discards more. We rule this out. The relative</p>
+<p>quantization error $\lVert W-\hat W\rVert/\lVert W\rVert$ is **remarkably uniform across all seven weight</p>
+<p>classes** (0.31–0.35, mean 0.33): every matrix has roughly-Gaussian rows and loses about a third of its</p>
+<p>energy to 2-bit rounding, whether it carries computation or lookup. The residual distributions of a</p>
+<p><i>fragile</i> value matrix (<code>L1.v</code>) and a <i>robust</i> query matrix (<code>L0.q</code>) are essentially identical (below).</p>
+<p>Yet elasticity varies by <b>four orders of magnitude</b> across those same matrices. Fragility is therefore</p>
+<p><b>not clusterability but sensitivity</b>: computation matrices compress <i>just as tightly</i>, but the function</p>
+<p>they implement amplifies the same relative weight error into a much larger loss change — consistent with</p>
+<p>the steep local gradients on Q/K and V/O in H2. (A weak residual trend survives, Spearman ρ = +0.43</p>
+<p>within the narrow error band, so clusterability contributes only marginally.)</p>
+
+<figure><img src="runs/exp_cluster_tightness.png"><figcaption>Left: fragility (elasticity) spans 4 orders of magnitude while relative quantization error barely varies (0.31–0.35). Right: a fragile value matrix and a robust query matrix cluster equally tightly — their weight-to-centroid residuals are identical</figcaption></figure>
+
 <h2>6. Implications for LLMs</h2>
 
 <p>Testable, falsifiable predictions. <b>(P1)</b> Quantized LLMs keep facts (bounded-output recall) but lose</p>
