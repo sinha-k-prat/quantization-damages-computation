@@ -181,6 +181,20 @@ $$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\mathrm{sg}[W]-\hat W\bigr\|_2^2}
 <p>weight is replaced by the nearest allowed value — the entire matrix is representable by 4 (or 2) numbers</p>
 <p>per row plus an index per weight.</p>
 
+<p>Extending this to a 2-D slice makes the clustering visible. Below is a real 12×16 block of the same</p>
+<p>matrix: (A) the full-precision weights (a continuum of values); (B) the same block after 2-bit</p>
+<p>clustering — each row now uses only its four learned anchors, producing visible banding and clipping the</p>
+<p>outliers (e.g. the dark extreme at row 0 is pulled to the row&#x27;s top anchor); (C) the cluster-assignment</p>
+<p>map, coloring each weight by which of its row&#x27;s four anchors it snapped to. Clustering is <b>per row</b>:</p>
+<p>each row learns its own four centers (they differ slightly row to row, e.g. row 0 `{−0.052,−0.018,</p>
+<p>+0.013,+0.048}<code> vs. row 10 </code>{−0.067,−0.025,+0.011,+0.051}`).</p>
+
+<figure><img src="runs/matrix_cluster.png"><figcaption>A real weight-matrix slice, full-precision vs. 2-bit clustered, with the per-row cluster-assignment map</figcaption></figure>
+
+<p>Concretely, this 12×16 = 192-weight block is stored as 12 per-row codebooks of 4 values (48 numbers)</p>
+<p>plus one 2-bit index per weight — the compression that the rest of the paper shows is *free for lookup</p>
+<p>skills but costly for computation*.</p>
+
 <h3>2.6 The un-cluster toggle (free leave-one-out un-quantization)</h3>
 
 <p>Because the STE keeps $W$ alive, setting a component&#x27;s quantize flag to false makes its forward pass use</p>

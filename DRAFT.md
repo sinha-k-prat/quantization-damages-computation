@@ -175,6 +175,20 @@ Learned codebook for this row: k=4 → `{−0.055, −0.020, 0.006, 0.037}`; k=2
 weight is replaced by the nearest allowed value — the entire matrix is representable by 4 (or 2) numbers
 per row plus an index per weight.
 
+Extending this to a 2-D slice makes the clustering visible. Below is a real 12×16 block of the same
+matrix: (A) the full-precision weights (a continuum of values); (B) the same block after 2-bit
+clustering — each row now uses only its four learned anchors, producing visible banding and clipping the
+outliers (e.g. the dark extreme at row 0 is pulled to the row's top anchor); (C) the cluster-assignment
+map, coloring each weight by which of its row's four anchors it snapped to. Clustering is **per row**:
+each row learns its own four centers (they differ slightly row to row, e.g. row 0 `{−0.052,−0.018,
++0.013,+0.048}` vs. row 10 `{−0.067,−0.025,+0.011,+0.051}`).
+
+![A real weight-matrix slice, full-precision vs. 2-bit clustered, with the per-row cluster-assignment map](runs/matrix_cluster.png)
+
+Concretely, this 12×16 = 192-weight block is stored as 12 per-row codebooks of 4 values (48 numbers)
+plus one 2-bit index per weight — the compression that the rest of the paper shows is *free for lookup
+skills but costly for computation*.
+
 ### 2.6 The un-cluster toggle (free leave-one-out un-quantization)
 
 Because the STE keeps $W$ alive, setting a component's quantize flag to false makes its forward pass use
