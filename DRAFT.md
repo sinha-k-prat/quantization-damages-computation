@@ -101,24 +101,106 @@ mixed-precision (HAWQ) computes a related per-layer sensitivity but frames it as
 our contribution is the interpretive lens (a functional taxonomy validated against independent ground
 truth) and the finding that quantization-sensitivity is a reusable probe.
 
-## 2. Setup
+## 2. Method
 
-**Task.** A flat list mixes objects and numbers, e.g. `[75, coin, ball, card, 69, 52, 62]`. Objects
-carry a *latent* shape (ball/coin/ring→round; box/book/card→flat) the model must learn — never given.
-Queries compose six per-token-labeled sub-skills: **read** (copy), **semantic** (recall a latent
-property), **filter** (number vs object), **index** (count to a position), **content** (value > V),
-**relative** (locate relative to an anchor). The model emits a step-by-step scratchpad; each trace token
-is labeled with the one skill it exercises, so cross-entropy splits into a skill × complexity matrix. A
-five-level curriculum grows list length 3–5 … 9–12; OOD evaluation uses lengths 13–24.
+### 2.1 Task and per-token skill labeling
 
-**Model.** A 4.32M-parameter Qwen2 replica (d=256, 6 layers, 8 heads/4 KV, RoPE, SwiGLU, tied
-embeddings). Quantization is per-row vector quantization (a k-value codebook per output row) with a
-straight-through estimator; k=4 = 2 bits/weight; 42 quantizable matrices.
+A flat list interleaves objects and numbers, e.g. `[75, coin, ball, card, 69, 52, 62]` (1-indexed from
+the left). Objects carry a *latent* shape — ball/coin/ring → round, box/book/card → flat — that appears
+nowhere in the input; the model must learn it, exactly as an LLM silently knows properties of words.
+Queries compose six sub-skills: **read** (copy an answer), **semantic** (recall the latent shape),
+**filter** (number vs. object), **index** (count to a position), **content** (compare a value to a
+threshold), **relative** (locate relative to an anchor). The model is trained to emit a step-by-step
+scratchpad and then the answer; **every generated token is labeled with the single skill it exercises.**
+For example, the query *"2nd element after first card"* over the list above yields the trace
 
-**Paired lockstep.** One fp32 model is deep-copied and quantized; control and target then train from
-identical weights on identical batches, so any loss gap is quantization's causal effect. The
-straight-through estimator keeps the full-precision weight alive alongside the codebook, enabling a free
-causal *un-clustering* (leave-one-out un-quantization) used for localization.
+```
+[relative]  anchor first card -> pos 4
+[index]     2 after -> pos 6 = 52
+[read]      A 52
+```
+
+Per-token labeling is what lets us split the loss into a skill × complexity matrix (§2.7). A five-level
+curriculum grows list length (L1: 3–5 … L5: 9–12); out-of-distribution evaluation uses lengths 13–24.
+
+### 2.2 Model
+
+A 4.32M-parameter Qwen2 replica: hidden width d=256, 6 layers, 8 attention heads / 4 KV heads
+(head dim 32), SwiGLU MLP (inner 672), RoPE (θ=10⁴), RMSNorm pre-norm, tied input/output embeddings,
+context 192. Each layer has seven quantizable linear maps — attention `q,k,v,o` and MLP `gate,up,down` —
+for **42 quantizable matrices** total.
+
+### 2.3 Per-row vector quantization (the clustering)
+
+Each quantizable weight matrix $W \in \mathbb{R}^{d_\text{out}\times d_\text{in}}$ is compressed
+**row-wise**. For output row $i$ we hold a codebook $C_i \in \mathbb{R}^{k}$ of $k$ scalar centroids
+("anchors"). Centroids are **initialized at $k$ evenly spaced empirical quantiles** of that row's
+weights and are thereafter **trainable** (the clustering is learned, not fixed):
+
+$$C_{i,j} \leftarrow \mathrm{Quantile}\!\left(W_{i,:},\; \tfrac{j}{k-1}\right),\quad j=0,\dots,k-1.$$
+
+At every forward pass each weight is snapped to its nearest centroid — a per-row scalar
+$k$-means / vector-quantization step:
+
+$$\hat{W}_{i,c} = C_{i,\,a(i,c)},\qquad a(i,c)=\arg\min_{j}\,\bigl|\,W_{i,c}-C_{i,j}\,\bigr|.$$
+
+With $k$ centroids a weight costs $\log_2 k$ bits; we use $k{=}4$ (**2 bits/weight**), and also crush to
+$k{=}2$ (**1 bit**) as a probe in §5.
+
+### 2.4 Straight-through estimator and the VQ-VAE objective
+
+The forward pass uses the quantized weights $\hat W$, but gradients flow to the full-precision $W$ via a
+straight-through estimator (sg = stop-gradient):
+
+$$W_{\text{ST}} = W + \operatorname{sg}\!\left[\hat W - W\right],\qquad
+\text{forward}=\hat W,\quad \frac{\partial W_{\text{ST}}}{\partial W}=I.$$
+
+Thus the full-precision $W$ is **kept alive alongside the codebook throughout training** — the property
+that later enables free un-clustering (§2.6). The codebook is trained with a per-matrix VQ-VAE objective:
+
+$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\operatorname{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
+\;+\; \beta\underbrace{\bigl\|W-\operatorname{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$
+
+### 2.5 A worked example (real weights from the trained model)
+
+One real output row of matrix `L1.v`, its learned 2-bit codebook, and the result of snapping each weight
+to its nearest anchor (first ten entries):
+
+| weight $W_{i,c}$ | 0.007 | 0.022 | 0.009 | −0.036 | −0.027 | −0.049 | −0.011 | −0.004 | 0.017 | −0.007 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **2-bit** $\hat W$ (k=4) | 0.006 | 0.037 | 0.006 | −0.020 | −0.020 | −0.055 | −0.020 | 0.006 | 0.006 | 0.006 |
+| **1-bit** $\hat W$ (k=2) | 0.075 | 0.075 | 0.075 | −0.081 | −0.081 | −0.081 | −0.081 | −0.081 | 0.075 | −0.081 |
+
+Learned codebook for this row: k=4 → `{−0.055, −0.020, 0.006, 0.037}`; k=2 → `{−0.081, 0.075}`. Every
+weight is replaced by the nearest allowed value — the entire matrix is representable by 4 (or 2) numbers
+per row plus an index per weight.
+
+### 2.6 The un-cluster toggle (free leave-one-out un-quantization)
+
+Because the STE keeps $W$ alive, setting a component's quantize flag to false makes its forward pass use
+$W$ directly — an **exact, retraining-free un-quantization**. Toggling it off for one component while all
+others stay quantized is a clean causal *leave-one-out* probe, used for localization in §3 (F4) and as
+the basis of the interpretability tool in §5.
+
+### 2.7 Loss decomposition
+
+Let $\text{ce}_t$ be the per-token cross-entropy and $s_t$ the skill label of target token $t$. The
+per-skill loss and the causal quantization penalty for skill $s$ are
+
+$$\mathrm{CE}_s=\frac{\sum_t \mathbb{1}[s_t=s]\,\text{ce}_t}{\sum_t \mathbb{1}[s_t=s]},\qquad
+\Delta_s=\mathrm{CE}_s^{\text{target}}-\mathrm{CE}_s^{\text{control}}.$$
+
+Because control and target share initialization and batches (§2.8), $\Delta_s$ is quantization's causal
+effect on skill $s$. We report $\Delta_s$ and the ratio $\mathrm{CE}_s^{\text{target}}/\mathrm{CE}_s^{\text{control}}$.
+
+### 2.8 Paired-lockstep training
+
+We build one fp32 model, deep-copy it, and quantize the copy. Control and target then train from
+**identical initialization on identical batches**, so any loss gap is attributable to quantization
+alone. Control minimizes masked cross-entropy; the target minimizes masked cross-entropy plus
+$\sum_{\text{matrices}}\mathcal{L}_{\text{vq}}$. Both use AdamW (lr $3\times10^{-4}$, weight decay 0.01),
+batch 48, 10k steps; the curriculum raises the maximum level from L1 to L5 over the first 60% of
+training. A single seed is used throughout (a limitation, §8).
 
 ## 3. Q1 & Q2 — what breaks, and where
 
