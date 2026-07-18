@@ -1,0 +1,125 @@
+<meta charset="utf-8"><title>What Quantization Breaks — an illustrated explainer</title>
+<style>
+:root{--ink:#232323;--pap:#fbfaf7;--gold:#c9a227;--blue:#3E7CB1;--org:#e07b3c;--grn:#3E8E5A;--red:#c0392b;--mut:#777}
+body{font:16px/1.65 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--ink);background:var(--pap);max-width:820px;margin:0 auto;padding:24px 18px 80px}
+h1{font-size:30px;line-height:1.2;margin:.2em 0} h2{font-size:22px;margin:1.8em 0 .3em;border-bottom:2px solid var(--gold);padding-bottom:5px}
+h3{font-size:17px;margin:1.3em 0 .2em;color:#111} .sub{color:var(--mut);font-size:17px;margin-top:0}
+.card{background:#fff;border:1px solid #e6e1d5;border-radius:10px;padding:16px 18px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.key{background:#f7f2e8;border-left:4px solid var(--gold);padding:10px 14px;border-radius:5px;margin:14px 0}
+.plain{background:#eef4f8;border-left:4px solid var(--blue);padding:10px 14px;border-radius:5px;margin:12px 0}
+.plain b{color:var(--blue)} code{background:#eee;padding:1px 5px;border-radius:3px;font-size:.9em;font-family:ui-monospace,monospace}
+table{border-collapse:collapse;width:100%;font-family:ui-monospace,monospace;font-size:13px;margin:8px 0}
+td,th{border:1px solid #ddd;padding:4px 7px;text-align:center} th{background:#f3efe6}
+img{width:100%;border:1px solid #e0dccf;border-radius:8px;margin:8px 0}
+figcaption{color:var(--mut);font-size:13.5px;margin:-2px 0 6px}
+.chip{display:inline-block;padding:1px 8px;border-radius:20px;font-size:12px;font-weight:600;color:#fff}
+.pill-list{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.tok{display:inline-block;padding:2px 7px;margin:2px;border-radius:5px;font-family:ui-monospace,monospace;font-size:13px;border:1px solid #ccc;background:#fff}
+.bar{height:15px;border-radius:3px;display:inline-block;vertical-align:middle}
+.scroll{overflow-x:auto} .mut{color:var(--mut)} .big{font-size:19px}
+</style>
+
+<h1>What does compressing an AI actually break?</h1>
+<p class="sub">An illustrated walk-through of a small experiment — with every idea shown on a real example.</p>
+
+<div class="key big">To run on phones and cheaply in data-centers, AI models are <b>quantized</b>: every number inside them is rounded to a coarse setting. Everyone measures <i>how much accuracy drops</i>. Almost no one asks <b>which specific abilities break</b>. We built a tiny model we fully understand, quantized it, and watched — one skill at a time.</div>
+
+<h2>1 · The machine we built</h2>
+<p>A miniature language model — the same design as modern LLMs (Qwen/Llama family), just tiny enough to dissect completely.</p>
+<div class="card">
+<table><tr><th>size</th><th>layers</th><th>attention</th><th>hidden width</th><th>vocabulary</th><th>quantized matrices</th></tr>
+<tr><td>4.32M params</td><td>6</td><td>8 heads / 4 KV</td><td>256</td><td>162 tokens</td><td>42</td></tr></table>
+<p class="mut" style="font-size:14px;margin:8px 0 0">Each of the 6 layers has 7 weight matrices we can quantize (the attention Q, K, V, O and the MLP's gate, up, down) → 42 total. Think of each matrix as a panel of dials the model turned during training.</p>
+</div>
+<figure><img src="curves.png"><figcaption>The model learning the task over 10,000 training steps — a full-precision "control" and a 2-bit "quantized" copy, trained side by side.</figcaption></figure>
+
+<h2>2 · What "quantization" actually does — on a real matrix</h2>
+<p>Here is <b>one real row</b> of weights from our trained model (matrix <code>L1.v</code>). Quantizing to <b>2 bits</b> means: instead of letting each number be anything, we pick just <b>4 allowed values</b> (a "codebook") and snap every weight to its nearest one.</p>
+<div class="card scroll">
+<b>Original weights</b> (full precision — each can be anything):
+<table><tr>
+<td>0.007</td><td>0.022</td><td>0.009</td><td>−0.036</td><td>−0.027</td><td>−0.049</td><td>−0.011</td><td>−0.004</td><td>0.017</td><td>−0.007</td></tr></table>
+<b>2-bit codebook</b> — only these 4 values are allowed: &nbsp;<code>−0.055 &nbsp; −0.020 &nbsp; 0.006 &nbsp; 0.037</code>
+<br><b>After snapping</b> each weight to the nearest allowed value:
+<table><tr>
+<td>0.006</td><td>0.037</td><td>0.006</td><td>−0.020</td><td>−0.020</td><td>−0.055</td><td>−0.020</td><td>0.006</td><td>0.006</td><td>0.006</td></tr></table>
+</div>
+<div class="plain"><b>Layman version:</b> imagine a volume knob that could turn to <i>any</i> position. Quantizing replaces it with a knob that only has 4 click-stops. Close enough for most jobs — but you can no longer make fine adjustments.</div>
+<p>Crank it harder — <b>1 bit</b> = only <b>2 allowed values</b> (<code>−0.081, 0.075</code>) — and the same row becomes almost a coin-flip of two numbers:</p>
+<div class="card scroll"><table><tr>
+<td>0.075</td><td>0.075</td><td>0.075</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>0.075</td><td>−0.081</td></tr></table></div>
+<p>This "how coarse can a matrix's dials get before it breaks" is the whole story — and later it becomes our measuring tool.</p>
+
+<h2>3 · The task — and the six skills hidden in it</h2>
+<p>We feed the model a <b>mixed list of objects and numbers</b> and ask a question. A real example:</p>
+<div class="card">
+<div class="pill-list">
+<span class="tok">75</span><span class="tok">coin</span><span class="tok">ball</span><span class="tok">card</span><span class="tok">69</span><span class="tok">52</span><span class="tok">62</span>
+</div>
+<p style="margin:8px 0"><b>Question:</b> "2nd element after first card" &nbsp;→&nbsp; <b>Answer:</b> <code>52</code></p>
+<p class="mut" style="font-size:14px">(Find <i>card</i> — it's at position 4 — then count 2 further to position 6, which holds 52.)</p>
+</div>
+<p>The questions are built to exercise <b>six distinct sub-skills</b>, so we can test each one separately:</p>
+<div class="card">
+<table style="font-size:14px">
+<tr><th>skill</th><th>what it does</th><th>example</th><th>type</th></tr>
+<tr><td><b>read</b></td><td>copy an answer out</td><td>emit "52"</td><td>copy</td></tr>
+<tr><td><b>semantic</b></td><td>recall a hidden property</td><td>"ball" is <i>round</i> (never told!)</td><td>lookup</td></tr>
+<tr><td><b>filter</b></td><td>tell numbers from objects</td><td>"coin" is an object</td><td>lookup</td></tr>
+<tr><td><b>index</b></td><td>count to a position</td><td>3rd from the left</td><td>computation</td></tr>
+<tr><td><b>content</b></td><td>compare values</td><td>first number &gt; 50</td><td>computation</td></tr>
+<tr><td><b>relative</b></td><td>locate relative to an anchor</td><td>2nd after "card"</td><td>computation</td></tr>
+</table></div>
+<div class="key">The clever bit: the model is <b>never told</b> that "ball" is round. It has to <i>learn</i> that hidden property — exactly like an LLM silently knowing facts about words. That makes "semantic" a genuine <b>recall-from-memory</b> skill, not something readable from the question.</div>
+
+<h2>4 · What is "pos N"? — the model showing its work</h2>
+<p>We train the model to write a <b>scratchpad</b> — its step-by-step working — before answering. Here is the real scratchpad for the example above. Read it like a child's long-division working:</p>
+<div class="card" style="font-family:ui-monospace,monospace;font-size:14px;line-height:2">
+<div><span class="chip" style="background:var(--red)">relative</span> &nbsp; <code>anchor first card → pos 4</code> &nbsp; <span class="mut">"the first <i>card</i> sits at position 4"</span></div>
+<div><span class="chip" style="background:var(--blue)">index</span> &nbsp; <code>2 after → pos 6 = 52</code> &nbsp; <span class="mut">"2 further along is position 6, which holds 52"</span></div>
+<div><span class="chip" style="background:var(--grn)">read</span> &nbsp; <code>A 52</code> &nbsp; <span class="mut">"answer: 52"</span></div>
+</div>
+<div class="plain"><b>So <code>pos 4</code> is just the model writing down a position as a number.</b> "pos N" = "the thing I'm looking for is at slot N." It's the moment the model commits the result of a hard search to paper. This turns out to be the single hardest — and most fragile — step in the whole task.</div>
+<p>Why is writing <code>pos 4</code> hard? To produce it, the model must (1) know we mean the object "card", (2) scan the list, (3) find the <i>first</i> one, (4) work out <i>where</i> it is. Everything <i>after</i> that number is written is easy arithmetic on a symbol it can now just read back.</p>
+
+<h2>5 · Where does the difficulty actually live? — a real loss map</h2>
+<p>We can measure, token by token, how "surprised" the model is (its <b>loss</b> — high = struggling). Here's a <b>harder, longer</b> version, and the surprise per scratchpad token — full-precision vs 2-bit:</p>
+<div class="card">
+<div class="pill-list" style="font-size:13px">
+<span class="tok">ball</span><span class="tok">75</span><span class="tok">53</span><span class="tok">ball</span><span class="tok">ball</span><span class="tok">65</span><span class="tok">24</span><span class="tok">21</span><span class="tok">44</span><span class="tok">box</span><span class="tok">84</span><span class="tok">43</span><span class="tok">coin</span><span class="tok">coin</span><span class="tok">card</span><span class="tok">75</span>
+</div>
+<p style="margin:6px 0"><b>Q:</b> "9th element after first ball" → <b>A:</b> box &nbsp;<span class="mut">(first ball = pos 1; 1+9 = pos 10 = box)</span></p>
+<table style="font-size:13px"><tr><th>scratchpad token</th><th>full-precision loss</th><th>2-bit loss</th><th></th></tr>
+<tr><td><code>anchor first ball → pos <b>1</b></code></td><td>0.0</td><td>1.2</td><td><span class="mut">easy: ball is first</span></td></tr>
+<tr><td><code>… count <b>9</b> …</code></td><td>12.0</td><td>14.1</td><td><span class="mut">recalling the big offset</span></td></tr>
+<tr><td><code>→ pos <b>10</b></code> &nbsp;⟵ the computed position</td><td style="background:#fdeaea"><b>4.3</b></td><td style="background:#f6d0d0"><b>11.9</b></td><td><span style="color:var(--red)">computation — quant hurts most</span></td></tr>
+<tr><td><code>= <b>box</b></code> (fetch it)</td><td>6.2</td><td>8.8</td><td><span class="mut">depends on pos 10</span></td></tr>
+<tr><td>every other token (<code>after → pos = ; A</code>)</td><td>~0</td><td>~0</td><td><span class="mut">trivial glue</span></td></tr></table>
+</div>
+<div class="key">Look at <code>pos 10</code>: full-precision is mildly unsure (4.3), the 2-bit model is <b>lost</b> (11.9). All the difficulty — and almost all the quantization damage — sits on the tokens where the model must <b>compute a quantity</b>. The glue words are free.</div>
+
+<h2>6 · The headline finding: computation breaks, memory doesn't</h2>
+<p>Measuring the 2-bit penalty for each skill separately:</p>
+<figure><img src="grouped.png"><figcaption>Bars near zero = quantization is free. Only the two <b>computation</b> skills (relative, content) pay a real cost. Every <b>lookup/memory</b> skill (recall a shape, tell number-vs-object, copy) is essentially untouched.</figcaption></figure>
+<div class="plain"><b>Plain version:</b> squeezing the model to 2 bits barely touches what it <i>remembers</i> (facts, categories) but blunts what it <i>works out</i> (counting, comparing, locating). This matches the folk experience that quantized chatbots stay fluent and factual but get worse at math and multi-step reasoning.</div>
+
+<h2>7 · Why? — one simple rule</h2>
+<div class="key big">Quantization is a <b>brittle extrapolator</b>. Inside the range it was trained on, coarse dials are fine (they even help, like rounding away noise). Push <i>beyond</i> that range and the coarse dials can't reach the in-between settings needed — and computation, which produces ever-larger numbers on bigger inputs, is exactly what runs off the edge.</div>
+<figure><img src="exp1b.png"><figcaption>The same computed-position token, across list lengths. Green (2-bit) is <b>better</b> than grey (full precision) on short lists it saw in training — then gets steadily <b>worse</b> as the lists grow past anything it was trained on. Memory skills never hit this wall because their answers (round/flat, an object name) never grow.</figcaption></figure>
+<p>This one rule explains everything above: memory skills have a small, fixed menu of answers → safe to compress. Computation skills produce quantities that grow with the input → the coarse dials can't keep up once you leave the training range.</p>
+
+<h2>8 · A bonus: turning the damage into a microscope</h2>
+<p>If crushing a matrix only hurts computation, we can run it <b>backwards</b> as a diagnostic: go to each of the 42 matrices, crush <i>only that one</i> to 1 bit, and see what breaks. Matrices doing delicate computation will scream; matrices doing simple lookups won't notice.</p>
+<figure><img src="exp_h1.png"><figcaption>Every dot is one matrix. Almost all sit above the line = crushing them hurts <b>computation</b> more than <b>lookup</b>. The orange dots (the model's "value" pathway) light up brightest — telling us <i>where</i> in the network the fragile computation lives, without any prior knowledge.</figcaption></figure>
+<p>And crucially, this "coarsen-and-watch" map agrees with a completely different, standard method (gradient importance) run on the <i>uncompressed</i> model — so it's measuring something real, not an artifact:</p>
+<figure><img src="exp_h2.png"><figcaption>Two independent methods, two different models, agreeing on which parts do the computing (correlation 0.55; 42/42 the same direction). Quantization sensitivity is a genuine, cheap interpretability probe.</figcaption></figure>
+
+<h2>9 · Honest limits</h2>
+<div class="card">
+<ul style="margin:0;padding-left:20px">
+<li>This is a <b>tiny 4.3M model on a synthetic task</b>, one random seed, one compression level. The next step is repeating it on a real small language model (e.g. Pythia-160M) with a standard quantizer.</li>
+<li>We tested a tempting stronger claim — that quantization specifically breaks "recall-and-then-use" — and a careful control experiment <b>disproved it</b>. We report that, because the honest version (the brittle-extrapolator rule) is what survived.</li>
+<li>The effects are small in absolute terms because the model has fully learned the task; the signal is in the <i>pattern</i> (which skills, which matrices, which tokens), not the raw size.</li>
+</ul>
+</div>
+<p class="mut" style="margin-top:22px;font-size:14px">Full technical write-up in <code>DRAFT.md</code>; all figures and exact numbers in <code>runs/</code>. Every example on this page was pulled directly from the trained model.</p>
