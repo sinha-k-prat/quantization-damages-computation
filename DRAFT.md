@@ -1,6 +1,6 @@
 # Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe
 
-*Working draft. Single-seed controlled study on a mechanistic testbed; figures in `runs/`, exact numbers in `runs/RESULTS.md`.*
+*Working draft. Single-seed controlled study on a mechanistic testbed; figures in `runs/`, exact numbers in `runs/RESULTS.md`. Every abbreviation is defined in the [Glossary](#10-glossary--abbreviations-and-notation) (§10).*
 
 ## Executive summary (for a general and policy audience)
 
@@ -346,6 +346,84 @@ the quantity-emitting tokens (Q2). A stronger recall-specific hypothesis was ref
 experiment. The same sensitivity, read as a map, is a *validated* interpretability probe for separating
 computation from lookup machinery. Both the finding and the tool point to one actionable target: protect
 the computation path, and let the model write its fragile quantities down.
+
+## 10. Glossary — abbreviations and notation
+
+*Everything abbreviated in this paper, in plain language.*
+
+**Quantization and training**
+
+| Term | Meaning |
+|---|---|
+| **quantization** | Compressing a model by rounding each weight to one of a small set of allowed values (fewer bits per weight). |
+| **CE** | Cross-entropy — the standard next-token training/evaluation loss. Lower = the model is less "surprised" = better. |
+| **bit / k / bit-width** | A codebook of `k` allowed values costs `log₂k` bits per weight. `k=4` → 2 bits; `k=2` → 1 bit. |
+| **fp32** | 32-bit floating point — full precision. Our uncompressed "control" model. |
+| **VQ** | Vector quantization — replacing each weight with the nearest entry in a small learned *codebook*. |
+| **codebook / centroid / anchor** | The small set of allowed values (here, per matrix-row) that weights are snapped to. |
+| **VQ-VAE** | Vector-Quantized Variational Auto-Encoder — the origin of the *codebook + commitment* loss we use (§2.4). |
+| **STE** | Straight-Through Estimator — a trick that lets gradients flow through the (non-differentiable) rounding step, keeping the full-precision weights trainable. |
+| **sg[·]** | Stop-gradient — an operation that blocks gradients from flowing (used inside the VQ loss). |
+| **QAT** | Quantization-Aware Training — training with quantization simulated in the forward pass (our setting). |
+| **PTQ** | Post-Training Quantization — quantizing a finished model without further training (e.g. GPTQ, AWQ). |
+| **β (beta)** | Weight on the commitment term of the VQ loss (we use 0.25). |
+| **un-clustering** | Turning quantization *off* for one component so it uses its full-precision weight — free because the STE kept that weight alive (§2.6). |
+
+**Named prior quantization methods** (cited for context in §1 Positioning)
+
+| Term | Meaning |
+|---|---|
+| **GPTQ** | A widely used one-shot post-training weight quantizer. |
+| **AWQ** | Activation-aware Weight Quantization — protects the weights that see large activations. |
+| **BitNet** | An approach to training LLMs at ~1 bit per weight. |
+| **GPTVQ** | A post-training *vector*-quantization method. |
+| **AQLM** | Additive Quantization for Language Models — multi-codebook PTQ. |
+| **HAWQ** | Hessian-AWare Quantization — assigns bit-widths by second-order sensitivity (related measurement to our probe, different framing). |
+
+**Model architecture**
+
+| Term | Meaning |
+|---|---|
+| **LLM** | Large Language Model. |
+| **MLP** | Multi-Layer Perceptron — the feed-forward block; here its three maps are *gate, up, down*. |
+| **Q, K, V, O** | The Query, Key, Value, and Output projection matrices inside attention. |
+| **GQA / KV heads** | Grouped-Query Attention — fewer Key/Value heads than Query heads (8 Q / 4 KV here). |
+| **RoPE** | Rotary Position Embedding — encodes token position by rotating Q and K (not V — central to §3's mechanism). |
+| **RMSNorm** | Root-Mean-Square normalization. |
+| **SwiGLU** | A gated feed-forward activation (Swish gate). |
+| **d / head dim** | Hidden width (256) / per-head width (32). |
+
+**Analysis and interpretability**
+
+| Term | Meaning |
+|---|---|
+| **OOD** | Out-Of-Distribution — inputs beyond the training range (here, lists longer than seen in training). |
+| **`pos N`** | A scratchpad token where the model writes a computed *position* as a number (e.g. `pos 4`). The hardest, most fragile step (§3). |
+| **SAE** | Sparse Autoencoder — the mainstream interpretability method, which operates on *activations* (we operate on *weights*). |
+| **bit-width elasticity** | Our probe: how much the loss rises when one component alone is crushed to 1 bit. High = it does fragile computation (§5). |
+| **Taylor / gradient saliency** | `(∂L·W)²` — a standard importance measure, used as our independent (non-quantization) validation (§5, H2). |
+| **ρ (rho)** | Spearman rank correlation — agreement between two rankings (1 = identical order). |
+| **Δₛ (Delta)** | The quantization penalty for skill *s* = (target CE − control CE) on that skill's tokens (§2.7). |
+
+**Labels used in this paper**
+
+| Term | Meaning |
+|---|---|
+| **Q1 / Q2 / Q3** | The three research questions (what breaks / where / when). |
+| **F1–F4** | The four main findings (skill-selectivity / token localization / regularizer-brittle / value-path). |
+| **E-a, E-b** | The experiment pair that tested and *refuted* the "recall-and-bind" hypothesis. |
+| **H1, H2** | The interpretability-tool experiments (elasticity map; non-quantization validation). |
+| **P1–P4** | The four testable predictions for production LLMs (§6). |
+| **L1–L5** | Curriculum difficulty levels (bands of list length). |
+| **the six skills** | read, semantic, filter, index, content, relative (defined in §2.1). |
+
+**Policy / governance**
+
+| Term | Meaning |
+|---|---|
+| **OECD** | Organisation for Economic Co-operation and Development — the intergovernmental body whose *AI Principles* define trustworthy-AI values. |
+| **OECD AI Principles** | Human-centred, transparent, robust/safe, accountable, inclusive AI (§7). |
+| **OECD.AI Catalogue of Tools & Metrics** | The OECD's public repository of practical trustworthy-AI tools — the concrete home for a probe like ours. |
 
 ---
 *Figures: `grouped.png` (F1), `exp1a.png` (F2), `exp1b.png` (F3), `exp2a.png` (F4), `exp_ea.png`/`exp_eb.png` (E-a/E-b, H2-recall refuted), `exp_h1.png`/`exp_h2.png` (H3-tool). Reproduce from `ckpt.pt` with `exp_*.py`.*

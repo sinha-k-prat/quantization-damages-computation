@@ -8,7 +8,7 @@ table{border-collapse:collapse;width:100%;font-size:13px;margin:1em 0} td,th{bor
 figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px} hr{border:none;border-top:1px solid #ddd;margin:2em 0}</style>
 <h1>Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe</h1>
 
-<p><i>Working draft. Single-seed controlled study on a mechanistic testbed; figures in <code>runs/</code>, exact numbers in <code>runs/RESULTS.md</code>.</i></p>
+<p><i>Working draft. Single-seed controlled study on a mechanistic testbed; figures in <code>runs/</code>, exact numbers in <code>runs/RESULTS.md</code>. Every abbreviation is defined in the Glossary (§10).</i></p>
 
 <h2>Executive summary (for a general and policy audience)</h2>
 
@@ -352,6 +352,84 @@ $$\mathrm{CE}_s=\frac{\sum_t \mathbb{1}[s_t=s]\,\text{ce}_t}{\sum_t \mathbb{1}[s
 <p>experiment. The same sensitivity, read as a map, is a <i>validated</i> interpretability probe for separating</p>
 <p>computation from lookup machinery. Both the finding and the tool point to one actionable target: protect</p>
 <p>the computation path, and let the model write its fragile quantities down.</p>
+
+<h2>10. Glossary — abbreviations and notation</h2>
+
+<p><i>Everything abbreviated in this paper, in plain language.</i></p>
+
+<p><b>Quantization and training</b></p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>quantization</b></td><td>Compressing a model by rounding each weight to one of a small set of allowed values (fewer bits per weight).</td></tr>
+<tr><td><b>CE</b></td><td>Cross-entropy — the standard next-token training/evaluation loss. Lower = the model is less &quot;surprised&quot; = better.</td></tr>
+<tr><td><b>bit / k / bit-width</b></td><td>A codebook of <code>k</code> allowed values costs <code>log₂k</code> bits per weight. <code>k=4</code> → 2 bits; <code>k=2</code> → 1 bit.</td></tr>
+<tr><td><b>fp32</b></td><td>32-bit floating point — full precision. Our uncompressed &quot;control&quot; model.</td></tr>
+<tr><td><b>VQ</b></td><td>Vector quantization — replacing each weight with the nearest entry in a small learned <i>codebook</i>.</td></tr>
+<tr><td><b>codebook / centroid / anchor</b></td><td>The small set of allowed values (here, per matrix-row) that weights are snapped to.</td></tr>
+<tr><td><b>VQ-VAE</b></td><td>Vector-Quantized Variational Auto-Encoder — the origin of the <i>codebook + commitment</i> loss we use (§2.4).</td></tr>
+<tr><td><b>STE</b></td><td>Straight-Through Estimator — a trick that lets gradients flow through the (non-differentiable) rounding step, keeping the full-precision weights trainable.</td></tr>
+<tr><td><b>sg[·]</b></td><td>Stop-gradient — an operation that blocks gradients from flowing (used inside the VQ loss).</td></tr>
+<tr><td><b>QAT</b></td><td>Quantization-Aware Training — training with quantization simulated in the forward pass (our setting).</td></tr>
+<tr><td><b>PTQ</b></td><td>Post-Training Quantization — quantizing a finished model without further training (e.g. GPTQ, AWQ).</td></tr>
+<tr><td><b>β (beta)</b></td><td>Weight on the commitment term of the VQ loss (we use 0.25).</td></tr>
+<tr><td><b>un-clustering</b></td><td>Turning quantization <i>off</i> for one component so it uses its full-precision weight — free because the STE kept that weight alive (§2.6).</td></tr>
+</table>
+
+<p><b>Named prior quantization methods</b> (cited for context in §1 Positioning)</p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>GPTQ</b></td><td>A widely used one-shot post-training weight quantizer.</td></tr>
+<tr><td><b>AWQ</b></td><td>Activation-aware Weight Quantization — protects the weights that see large activations.</td></tr>
+<tr><td><b>BitNet</b></td><td>An approach to training LLMs at ~1 bit per weight.</td></tr>
+<tr><td><b>GPTVQ</b></td><td>A post-training <i>vector</i>-quantization method.</td></tr>
+<tr><td><b>AQLM</b></td><td>Additive Quantization for Language Models — multi-codebook PTQ.</td></tr>
+<tr><td><b>HAWQ</b></td><td>Hessian-AWare Quantization — assigns bit-widths by second-order sensitivity (related measurement to our probe, different framing).</td></tr>
+</table>
+
+<p><b>Model architecture</b></p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>LLM</b></td><td>Large Language Model.</td></tr>
+<tr><td><b>MLP</b></td><td>Multi-Layer Perceptron — the feed-forward block; here its three maps are <i>gate, up, down</i>.</td></tr>
+<tr><td><b>Q, K, V, O</b></td><td>The Query, Key, Value, and Output projection matrices inside attention.</td></tr>
+<tr><td><b>GQA / KV heads</b></td><td>Grouped-Query Attention — fewer Key/Value heads than Query heads (8 Q / 4 KV here).</td></tr>
+<tr><td><b>RoPE</b></td><td>Rotary Position Embedding — encodes token position by rotating Q and K (not V — central to §3&#x27;s mechanism).</td></tr>
+<tr><td><b>RMSNorm</b></td><td>Root-Mean-Square normalization.</td></tr>
+<tr><td><b>SwiGLU</b></td><td>A gated feed-forward activation (Swish gate).</td></tr>
+<tr><td><b>d / head dim</b></td><td>Hidden width (256) / per-head width (32).</td></tr>
+</table>
+
+<p><b>Analysis and interpretability</b></p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>OOD</b></td><td>Out-Of-Distribution — inputs beyond the training range (here, lists longer than seen in training).</td></tr>
+<tr><td><b><code>pos N</code></b></td><td>A scratchpad token where the model writes a computed <i>position</i> as a number (e.g. <code>pos 4</code>). The hardest, most fragile step (§3).</td></tr>
+<tr><td><b>SAE</b></td><td>Sparse Autoencoder — the mainstream interpretability method, which operates on <i>activations</i> (we operate on <i>weights</i>).</td></tr>
+<tr><td><b>bit-width elasticity</b></td><td>Our probe: how much the loss rises when one component alone is crushed to 1 bit. High = it does fragile computation (§5).</td></tr>
+<tr><td><b>Taylor / gradient saliency</b></td><td><code>(∂L·W)²</code> — a standard importance measure, used as our independent (non-quantization) validation (§5, H2).</td></tr>
+<tr><td><b>ρ (rho)</b></td><td>Spearman rank correlation — agreement between two rankings (1 = identical order).</td></tr>
+<tr><td><b>Δₛ (Delta)</b></td><td>The quantization penalty for skill <i>s</i> = (target CE − control CE) on that skill&#x27;s tokens (§2.7).</td></tr>
+</table>
+
+<p><b>Labels used in this paper</b></p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>Q1 / Q2 / Q3</b></td><td>The three research questions (what breaks / where / when).</td></tr>
+<tr><td><b>F1–F4</b></td><td>The four main findings (skill-selectivity / token localization / regularizer-brittle / value-path).</td></tr>
+<tr><td><b>E-a, E-b</b></td><td>The experiment pair that tested and <i>refuted</i> the &quot;recall-and-bind&quot; hypothesis.</td></tr>
+<tr><td><b>H1, H2</b></td><td>The interpretability-tool experiments (elasticity map; non-quantization validation).</td></tr>
+<tr><td><b>P1–P4</b></td><td>The four testable predictions for production LLMs (§6).</td></tr>
+<tr><td><b>L1–L5</b></td><td>Curriculum difficulty levels (bands of list length).</td></tr>
+<tr><td><b>the six skills</b></td><td>read, semantic, filter, index, content, relative (defined in §2.1).</td></tr>
+</table>
+
+<p><b>Policy / governance</b></p>
+
+<table><tr><th>Term</th><th>Meaning</th></tr>
+<tr><td><b>OECD</b></td><td>Organisation for Economic Co-operation and Development — the intergovernmental body whose <i>AI Principles</i> define trustworthy-AI values.</td></tr>
+<tr><td><b>OECD AI Principles</b></td><td>Human-centred, transparent, robust/safe, accountable, inclusive AI (§7).</td></tr>
+<tr><td><b>OECD.AI Catalogue of Tools &amp; Metrics</b></td><td>The OECD&#x27;s public repository of practical trustworthy-AI tools — the concrete home for a probe like ours.</td></tr>
+</table>
 
 <hr>
 <p><i>Figures: <code>grouped.png</code> (F1), <code>exp1a.png</code> (F2), <code>exp1b.png</code> (F3), <code>exp2a.png</code> (F4), <code>exp_ea.png</code>/<code>exp_eb.png</code> (E-a/E-b, H2-recall refuted), <code>exp_h1.png</code>/<code>exp_h2.png</code> (H3-tool). Reproduce from <code>ckpt.pt</code> with <code>exp_</i>.py</code>.*</p>
