@@ -1,14 +1,11 @@
-<meta charset=utf-8><title>DRAFT — Quantization Damages Computation, Not Retrieval</title>
-<script>MathJax={tex:{inlineMath:[['$','$']],displayMath:[['$$','$$']]}};</script>
+<meta charset=utf-8><title>DRAFT</title><script>MathJax={tex:{inlineMath:[['$','$']],displayMath:[['$$','$$']]}};</script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><style>
 body{font:16px/1.7 -apple-system,sans-serif;max-width:800px;margin:0 auto;padding:30px 20px 80px;color:#222;background:#fbfaf7}
-h1{font-size:25px;line-height:1.25} h2{font-size:20px;margin-top:1.8em;border-bottom:2px solid #c9a227;padding-bottom:4px}
-h3{font-size:16px;color:#333} code{background:#eee;padding:1px 4px;border-radius:3px;font-size:.88em}
-pre{background:#2d2d2d;color:#eee;padding:12px 14px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.5}
+h1{font-size:25px} h2{font-size:20px;margin-top:1.8em;border-bottom:2px solid #c9a227;padding-bottom:4px} h3{font-size:16px}
+code{background:#eee;padding:1px 4px;border-radius:3px;font-size:.88em} pre{background:#2d2d2d;color:#eee;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px}
 blockquote{border-left:4px solid #c9a227;background:#f7f2e8;margin:1em 0;padding:8px 16px;border-radius:5px}
 table{border-collapse:collapse;width:100%;font-size:13px;margin:1em 0} td,th{border:1px solid #ddd;padding:5px 8px;text-align:left;vertical-align:top} th{background:#f3efe6}
-figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px;margin-top:4px}
-hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
+figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px} hr{border:none;border-top:1px solid #ddd;margin:2em 0}</style>
 <h1>Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe</h1>
 
 <p><i>Working draft. Single-seed controlled study on a mechanistic testbed; figures in <code>runs/</code>, exact numbers in <code>runs/RESULTS.md</code>.</i></p>
@@ -161,14 +158,14 @@ $$\hat{W}_{i,c} = C_{i,\,a(i,c)},\qquad a(i,c)=\arg\min_{j}\,\bigl|\,W_{i,c}-C_{
 <p>The forward pass uses the quantized weights $\hat W$, but gradients flow to the full-precision $W$ via a</p>
 <p>straight-through estimator (sg = stop-gradient):</p>
 
-$$W_{\text{ST}} = W + \operatorname{sg}\!\left[\hat W - W\right],\qquad
+$$W_{\text{ST}} = W + \mathrm{sg}\!\left[\hat W - W\right],\qquad
 <p>\text{forward}=\hat W,\quad \frac{\partial W_{\text{ST}}}{\partial W}=I.$$</p>
 
 <p>Thus the full-precision $W$ is <b>kept alive alongside the codebook throughout training</b> — the property</p>
 <p>that later enables free un-clustering (§2.6). The codebook is trained with a per-matrix VQ-VAE objective:</p>
 
-$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\operatorname{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
-<p>\;+\; \beta\underbrace{\bigl\|W-\operatorname{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$</p>
+$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\mathrm{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
+<p>\;+\; \beta\underbrace{\bigl\|W-\mathrm{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$</p>
 
 <h3>2.5 A worked example (real weights from the trained model)</h3>
 

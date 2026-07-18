@@ -152,14 +152,14 @@ $k{=}2$ (**1 bit**) as a probe in §5.
 The forward pass uses the quantized weights $\hat W$, but gradients flow to the full-precision $W$ via a
 straight-through estimator (sg = stop-gradient):
 
-$$W_{\text{ST}} = W + \operatorname{sg}\!\left[\hat W - W\right],\qquad
+$$W_{\text{ST}} = W + \mathrm{sg}\!\left[\hat W - W\right],\qquad
 \text{forward}=\hat W,\quad \frac{\partial W_{\text{ST}}}{\partial W}=I.$$
 
 Thus the full-precision $W$ is **kept alive alongside the codebook throughout training** — the property
 that later enables free un-clustering (§2.6). The codebook is trained with a per-matrix VQ-VAE objective:
 
-$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\operatorname{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
-\;+\; \beta\underbrace{\bigl\|W-\operatorname{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$
+$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\mathrm{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
+\;+\; \beta\underbrace{\bigl\|W-\mathrm{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$
 
 ### 2.5 A worked example (real weights from the trained model)
 
