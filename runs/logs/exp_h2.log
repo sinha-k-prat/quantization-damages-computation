@@ -1,0 +1,16 @@
+=== H2: does gradient-saliency (fp32 control, non-quant) agree with H1 elasticity (VQ) ? ===
+Spearman rank corr(compute-saliency, compute-elasticity) over 42 components = +0.55
+
+class-average gradient compute-saliency (fp32 control, log10):
+class      compute      lookup  c/l ratio
+q        7.619e-06   3.442e-10    22134.2
+k        1.331e-05   3.465e-10    38399.8
+v        4.014e-06   6.932e-10     5790.6
+o        3.837e-06   7.476e-10     5132.1
+gate     1.233e-06   2.529e-10     4875.1
+up       1.106e-06   2.177e-10     5081.3
+down     2.163e-06   4.320e-10     5006.7
+
+components where gradient compute-saliency > lookup-saliency: 42/42
+
+saved runs/exp_h2.png

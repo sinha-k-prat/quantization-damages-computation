@@ -1,0 +1,40 @@
+<meta charset="utf-8"><title>Retrieval Quantization Study — results</title>
+<style>
+body{font:14px/1.5 -apple-system,sans-serif;max-width:1000px;margin:24px auto;padding:0 16px;color:#222}
+h1{font-size:22px} h2{font-size:16px;margin-top:30px;border-bottom:1px solid #ddd;padding-bottom:4px}
+.thesis{background:#f7f2e8;border-left:4px solid #c9a227;padding:10px 14px;border-radius:4px}
+figure{margin:14px 0} img{width:100%;border:1px solid #ddd;border-radius:6px}
+figcaption{color:#555;font-size:12.5px;margin-top:4px} .retr{color:#c0392b;font-weight:600}
+code{background:#eee;padding:1px 4px;border-radius:3px;font-size:12px}
+</style>
+<h1>Retrieval Quantization Study — results gallery</h1>
+<p class=thesis><b>Thesis:</b> Quantization is a <b>brittle extrapolator</b> — free (even regularizing)
+in-distribution, and it damages an operation in proportion to how far the <i>quantity it must compute</i>
+extrapolates beyond training. Skill-selectivity follows: bounded-output lookup skills are quant-free;
+growing-output computation skills are fragile out-of-distribution.</p>
+<p>Model: MiniQwen M (d=256, 6L, 4.32M params), VQ k=4 (2-bit), paired fp32-control vs VQ-target.
+Single seed, CPU. Full numbers in <code>runs/RESULTS.md</code>, logs in <code>runs/logs/</code>.</p>
+
+<h2>F1 — damage is skill-selective (computation pays, retrieval is free)</h2>
+<figure><img src="grouped.png"><figcaption>Per-skill 2-bit penalty. read/semantic/filter/index ≈ 0 (lookup, bounded output); content +1.25×, relative +1.61× (computation, growing output).</figcaption></figure>
+
+<h2>F2 — damage localizes to the position-computation token</h2>
+<figure><img src="exp1a.png"><figcaption>Both difficulty and quant sensitivity spike surgically on the <code>pos N</code> token; flat elsewhere. Second spike on the second <code>pos N</code>.</figcaption></figure>
+
+<h2>F3 — regularizer in-distribution, brittle out-of-distribution</h2>
+<figure><img src="exp1b.png"><figcaption>Gap at <code>pos N</code> vs list length: VQ better short/in-dist, worse & diverging OOD. Crosses zero at the training distribution. The core mechanism.</figcaption></figure>
+
+<h2>F4 — the fragile computation lives in the value/output path</h2>
+<figure><img src="exp2a.png"><figcaption>Weight-class localization: <code>relative</code> dominated by V/O (payload) path, ~10× Q/K. (Sign confounded by QAT co-adaptation; magnitude = load-bearing.)</figcaption></figure>
+
+<h2>E-a / E-b — testing the "recall" reframe (and <span class=retr>retracting it</span>)</h2>
+<figure><img src="exp_ea.png"><figcaption>E-a looked like recall-and-bind was fragile (OOD implicit +0.53 vs explicit −0.17)…</figcaption></figure>
+<figure><img src="exp_eb.png"><figcaption>…but the length-controlled E-b <span class=retr>refuted it</span>: recall+bind (T4) is the MOST robust. Gap tracks how far the computed quantity extrapolates, not recall. <b>F5 retracted.</b></figcaption></figure>
+
+<h2>H1 — clustering-quantization as an interpretability tool (validated)</h2>
+<figure><img src="exp_h1.png"><figcaption>H1 — bit-width elasticity map: crushing a component to 1-bit hurts computation more than lookup (35/42 above the line), and recovers the value/output localization from scratch. corr(elasticity, magnitude) = −0.15 (not a magnitude artifact).</figcaption></figure>
+<figure><img src="exp_h2.png"><figcaption>H2 — validated against a non-quantization ground truth: gradient saliency on the fp32 model agrees (Spearman ρ=0.55; 42/42 directional). Elasticity is correlated with, but not reducible to, gradient importance — it captures discrete-tolerance the gradients miss.</figcaption></figure>
+
+<h2>Training curves (reference)</h2>
+<figure><img src="curves.png"><figcaption>Paired control vs target over the 10k-step run; per-skill CE and OOD exact-match.</figcaption></figure>
+<p style="color:#888;font-size:12px;margin-top:24px">Generated from the checkpoint <code>runs/ckpt.pt</code>. See memory <code>retrieval-paper-materials.md</code> for the full paper skeleton.</p>
