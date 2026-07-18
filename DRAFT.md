@@ -1,118 +1,107 @@
-# Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe
+# Quantization Damages Computation, Not Retrieval: A Controlled Dissociation
 
-*Working draft. Single-seed controlled study on a mechanistic testbed; figures in `runs/`, exact numbers in `runs/RESULTS.md`. Every abbreviation is defined in the [Glossary](#10-glossary--abbreviations-and-notation) (§10).*
-
-## Executive summary (for a general and policy audience)
-
-**The problem — a governance blind spot.** To run cheaply and on-device, AI models are *compressed*
-(quantized). This is done almost universally, yet what compression does to a model's specific *abilities*
-is undocumented: standard tests report an average accuracy, not which skills survived. A compressed model
-can look "97% as good" while having quietly lost a capability that matters.
-
-**What we do.** On a model small enough to dissect completely, we measure compression's effect
-skill-by-skill and locate where each skill lives inside the network. We find that compression **spares
-memory and recall but damages multi-step computation**, that this is fundamentally an *extrapolation*
-failure (it breaks when the model must compute beyond what it practiced), and that both effects
-concentrate in a specific, identifiable part of the network. We then turn the method into a cheap probe
-that maps **which internal circuits carry which skills** — making the effect of compression *auditable
-before deployment*.
-
-**Why it matters for trustworthy AI.** This turns an opaque efficiency step into a transparent,
-documentable one (which capabilities changed, and where), lets an operator *predict the failure surface*
-(computation and long-context reasoning fail first) and *mitigate* it (keep reasoning-critical weights
-precise; route hard cases to the full model). It supplies the kind of transparency, robustness, and
-accountability evidence the OECD trustworthy-AI framework calls for; §7 maps each finding to the
-relevant OECD AI Principle.
-
-**Honest scope.** This is a controlled proof-of-concept on a 4.3M-parameter model, single seed. It
-demonstrates a *method and a mechanism*, not a deployable assurance tool; a replication on a
-production-scale model is the identified next step.
+*Working draft, restructured to NeurIPS format. Figures in `runs/`, exact numbers in `runs/RESULTS.md`,
+abbreviations in Appendix E. Single-seed study on a mechanistic testbed (see §6 for scope).*
 
 ## Abstract
 
-Weight quantization is evaluated almost entirely by aggregate metrics (perplexity, downstream
-accuracy), which report *how much* a model degrades but not *which capability* is lost. We give the
-first controlled, per-skill causal account. On a testbed engineered to dissociate six reasoning
-sub-skills, we train an fp32 control and a 2-bit vector-quantized target in lockstep (identical
-initialization, identical batches), so every per-skill and per-token loss difference is attributable to
-quantization alone. We report four verdicts. **(1)** Quantization damage is strongly *skill-selective*:
-associative-lookup skills compress for free while multi-step computation skills pay a consistent
-penalty (confirmed). **(2)** A single mechanism — *quantization is a brittle extrapolator*, free or
-regularizing in-distribution and damaging in proportion to how far a computed quantity extrapolates —
-unifies the skill, token, and length effects (supported); a competing "recall-and-bind" hypothesis is
-*refuted* by a controlled length-matched experiment, which we report in full. **(3)** The fragile
-computation localizes to the value/output projections and to the scratchpad tokens that emit computed
-quantities (confirmed, with a stated co-adaptation caveat). **(4)** The measurement apparatus
-generalizes into a reusable interpretability probe: a component's *bit-width elasticity* is a functional
-fingerprint that separates computation from lookup machinery, is not a magnitude artifact, and agrees
-with gradient-based importance computed on the fp32 model (Spearman ρ = 0.55; 42/42 directional) while
-capturing discrete-tolerance structure gradients miss (validated). We conclude with concrete,
-falsifiable predictions for production LLMs, and are explicit about scope: a 4.3M-parameter testbed,
-single seed, one bit-width — with a real-model replication as the identified path to generality.
+Weight quantization is evaluated by aggregate metrics — perplexity and downstream accuracy — that report
+how much a model degrades but not which capability is lost. We give a controlled, per-skill causal
+account on a testbed engineered to dissociate six reasoning sub-skills, training a full-precision control
+and a 2-bit vector-quantized target in lockstep (identical initialization and batches) so that every
+per-skill and per-token loss difference is attributable to quantization alone. Quantization damage is
+strongly skill-selective: associative-lookup skills (recall, filtering, copying) compress essentially
+for free, while multi-step computation skills (relative positioning, value comparison) pay a consistent
+penalty. A single mechanism accounts for this — quantization is a brittle extrapolator, free or even
+regularizing in-distribution and damaging in proportion to how far a computed quantity extrapolates
+beyond the training range — and a tempting recall-conditioned alternative is falsified by a
+length-controlled experiment. The damage localizes to the value/output projections and to the tokens
+that emit computed quantities; a weight-space analysis shows all matrices cluster equally tightly, so
+fragility is functional sensitivity, not compressibility. Finally, the method yields a reusable probe:
+per-component bit-width elasticity separates computation from lookup machinery and agrees with
+gradient-based importance on the full-precision model. We give four predictions for production LLMs, one
+already consistent with reported quantized-model degradation on mathematical reasoning.
 
 ## 1. Introduction
 
-Post-training quantization and quantization-aware training compress LLMs to 2–4 bits at small aggregate
-cost. But aggregate metrics average over token types dominated by fluent, recall-like predictions, so
-they under-weight the reasoning tokens that matter and cannot say *what* a given quantizer breaks. The
-practitioner folklore — quantized models stay fluent and factual but degrade on math, code, and
-multi-step reasoning — has had no controlled mechanistic account.
+Post-training quantization and quantization-aware training compress large language models (LLMs) to 2–4
+bits at small aggregate cost [Frantar et al. 2023; Lin et al. 2024]. But aggregate metrics average over
+token types dominated by fluent, recall-like predictions, so they under-weight the reasoning tokens that
+matter and cannot say *what* a given quantizer breaks. Recent evaluations report that quantized models
+degrade disproportionately on multi-step reasoning (GSM8K, MATH) relative to knowledge benchmarks (MMLU)
+[Feng et al. 2026; Gong et al. 2026], but offer no controlled mechanistic account of *why*.
 
-We provide one, organized around three questions and answered with explicit verdicts:
+We provide one, organized around three questions:
 
-- **Q1 (what breaks).** Is quantization damage skill-selective? → **Verdict: yes** (§3, F1).
-- **Q2 (where).** Does the damage co-localize with where a skill is computed? → **Verdict: yes** (§3, F4; §5).
+- **Q1 (what breaks).** Is quantization damage skill-selective?
+- **Q2 (where).** Does the damage co-localize with where a skill is computed?
 - **Q3 (when).** How does it interact with compositional complexity and length generalization?
-  → **Verdict: it is an extrapolation effect** (§4, F3).
 
-### Contributions
+The controlled attribution these require is impossible at scale — one cannot train a production model
+twice in lockstep — so we use a testbed small enough to dissect completely and rich enough to dissociate
+six reasoning sub-skills. Our contributions:
 
 1. **A causal per-skill protocol.** Paired-lockstep quantization (control vs. target from identical
-   init/batches) plus per-token skill labeling isolates quantization's effect on each sub-skill and each
-   reasoning step — a measurement aggregate benchmarks cannot make.
-2. **A skill-selectivity result and a unifying mechanism.** Computation is damaged, retrieval is free
-   (F1); one rule — *brittle extrapolation* — explains the skill, token, and length effects (F3, §4).
-   We falsify a competing "recall-and-bind" hypothesis with a controlled experiment (§4) and report the
-   retraction, because the surviving claim is stronger for it.
+   initialization and batches) with per-token skill labeling isolates quantization's effect on each
+   sub-skill and each reasoning step — an attribution aggregate benchmarks cannot make.
+2. **A skill-selective result and a unifying mechanism.** Computation is damaged, retrieval is free; one
+   rule, *brittle extrapolation*, explains the skill, token, and length effects. We falsify a competing
+   recall-conditioned hypothesis with a controlled experiment.
 3. **Localization.** The fragile computation lives in the value/output path and on the quantity-emitting
-   tokens (F2, F4), consistent with a RoPE-based account of how position reaches the MLP.
-4. **A validated interpretability probe.** *Bit-width elasticity* maps functional roles from
-   quantization sensitivity; we validate it against an independent, non-quantization ground truth and
-   show it is correlated with but not reducible to gradient importance (§5, H1–H2).
+   tokens; a weight-space analysis shows it is functional *sensitivity*, not weight *compressibility*.
+4. **A validated interpretability probe.** Per-component *bit-width elasticity* fingerprints functional
+   roles from quantization sensitivity and agrees with an independent, non-quantization ground truth.
 
-### Verdict summary
+**Summary of findings.**
 
-| # | Claim / hypothesis | Verdict | Key evidence |
-|---|---|---|---|
-| Q1 | Quantization damage is skill-selective | **Confirmed** | F1: relative 1.61×, content 1.25×; all lookup skills ≤1.0× |
-| Q2 | Damage co-localizes with computation | **Confirmed** (caveat) | F4 value/output path; H1/H2 elasticity map |
-| Q3 | Damage is a complexity/length effect | **Confirmed** | F3: regularizes in-dist, brittle OOD, monotonic in length |
-| H1-mech | Unifying rule = brittle extrapolation | **Supported** | F1–F4 + E-b all consistent |
-| H2-recall | Quant specifically breaks *recall-and-bind* | **Refuted** | E-b: recall+bind is the *most* robust; E-a was a distance confound |
-| H3-tool | Bit-width elasticity is a functional probe | **Validated** | H1 (35/42, not magnitude) + H2 (ρ=0.55 vs. fp32 gradients, 42/42) |
+| Question / claim | Finding | Evidence |
+|---|---|---|
+| Q1 — skill-selective? | Computation damaged (relative 1.61×, content 1.25×); lookup free (≤1.0×) | §4.1 (F1) |
+| Q3 — complexity/length? | Regularizes in-distribution, brittle out-of-distribution, monotonic in length | §4.2 (F3) |
+| Q2 — where? | Value/output path; the quantity-emitting tokens; sensitivity not compressibility | §4.3 (F2/F4) |
+| Competing recall hypothesis | Falsified — recall+bind is the *most* robust, not the least | §4.4 (E-a/E-b) |
+| Reusable probe? | Elasticity separates computation from lookup; agrees with fp32 gradients | §5 (H1/H2) |
 
-### Positioning
+## 2. Related Work
 
-Quantization methods (GPTQ, AWQ, BitNet, GPTVQ, AQLM) are measured by aggregate perplexity/accuracy and
-do not localize damage to *capabilities* or *components*; ours is a diagnostic-and-mechanism paper, not
-a new compressor. For interpretability, sparse autoencoders cluster *activations* to recover *features*;
-we cluster *weights* to characterize *functional roles* — complementary and coarser. Hessian
-mixed-precision (HAWQ) computes a related per-layer sensitivity but frames it as a compression budget;
-our contribution is the interpretive lens (a functional taxonomy validated against independent ground
-truth) and the finding that quantization-sensitivity is a reusable probe.
+**Quantization methods and their evaluation.** Post-training quantization scales weights to low bit-width
+via error-correcting (GPTQ [Frantar et al. 2023]), activation-aware (AWQ [Lin et al. 2024]), or
+outlier-migrating (SmoothQuant [Xiao et al. 2023]) schemes; vector-quantization methods learn codebooks
+over weight groups (GPTVQ [van Baalen et al. 2024], AQLM [Egiazarian et al. 2024]), and BitNet trains
+near-1-bit models directly [Ma et al. 2024]. These are evaluated by perplexity and task accuracy;
+recent benchmark studies find aggressive quantization degrades reasoning (GSM8K, MATH) earlier than
+knowledge tasks [Feng et al. 2026; Gong et al. 2026; Kim et al. 2025], attributing it informally to
+error accumulation across steps. We supply the controlled mechanism behind that observation and localize
+it to components — neither of which aggregate benchmarks provide.
 
-## 2. Method
+**Mixed-precision sensitivity (our nearest neighbor).** HAWQ [Dong et al. 2019] and its successors assign
+per-layer bit-widths from second-order (Hessian) sensitivity — a *compression budget*. We differ in
+three ways a reviewer should weigh. (i) HAWQ measures sensitivity to *set a bit-width*; it never asks
+what the sensitivity *means*, and does not decompose it by capability. Our per-skill causal
+decomposition (§4.1) requires the token labeling and lockstep pairing that HAWQ lacks. (ii) We identify
+the *mechanism* (bounded vs. growing output ranges, §4.2), which HAWQ does not address. (iii) We show
+that coarsening-tolerance (elasticity) captures *discrete*-quantization structure that a local
+second-order measure misses: elasticity and gradient importance agree on the compute-vs-lookup axis but
+disagree, in a structured way, on weight class (§5, H2). In short, HAWQ is a budgeting tool; ours is a
+diagnostic-and-mechanism.
 
-### 2.1 Task and per-token skill labeling
+**Interpretability.** Sparse autoencoders decompose *activations* into features [Cunningham et al. 2023;
+Bricken et al. 2023]; causal ablation and gradient attribution localize behavior to components; the
+key–value view of MLPs [Geva et al. 2021] and induction-head analyses [Olsson et al. 2022] establish
+mechanisms on small models before they are found at scale. We operate on *weights* rather than
+activations, characterizing what a component *does* (transform vs. store) rather than what it represents,
+and validate our probe against gradient attribution.
 
-A flat list interleaves objects and numbers, e.g. `[75, coin, ball, card, 69, 52, 62]` (1-indexed from
-the left). Objects carry a *latent* shape — ball/coin/ring → round, box/book/card → flat — that appears
-nowhere in the input; the model must learn it, exactly as an LLM silently knows properties of words.
-Queries compose six sub-skills: **read** (copy an answer), **semantic** (recall the latent shape),
-**filter** (number vs. object), **index** (count to a position), **content** (compare a value to a
-threshold), **relative** (locate relative to an anchor). The model is trained to emit a step-by-step
-scratchpad and then the answer; **every generated token is labeled with the single skill it exercises.**
-For example, the query *"2nd element after first card"* over the list above yields the trace
+## 3. Method
+
+**Task and per-token labeling.** A flat list interleaves objects and numbers, e.g.
+`[75, coin, ball, card, 69, 52, 62]` (1-indexed from the left). Objects carry a *latent* shape —
+ball/coin/ring → round, box/book/card → flat — that appears nowhere in the input and must be learned, as
+an LLM silently knows properties of words. Six sub-skills compose the queries: **read** (copy),
+**semantic** (recall the latent shape), **filter** (number vs. object), **index** (count to a position),
+**content** (compare a value to a threshold), **relative** (locate relative to an anchor). The model
+emits a scratchpad [Nye et al. 2021] and then the answer, and **every generated token is labeled with the
+single skill it exercises.** For *"2nd element after first card"*:
 
 ```
 [relative]  anchor first card -> pos 4
@@ -120,339 +109,242 @@ For example, the query *"2nd element after first card"* over the list above yiel
 [read]      A 52
 ```
 
-Per-token labeling is what lets us split the loss into a skill × complexity matrix (§2.7). A five-level
-curriculum grows list length (L1: 3–5 … L5: 9–12); out-of-distribution evaluation uses lengths 13–24.
+A five-level curriculum grows list length (L1: 3–5 … L5: 9–12); out-of-distribution (OOD) evaluation
+uses lengths 13–24.
 
-### 2.2 Model
+**Paired-lockstep protocol (headline method).** We build one full-precision (fp32) model, deep-copy it,
+and quantize the copy; control and target then train from *identical initialization on identical
+batches*. Any per-skill or per-token loss gap is therefore quantization's causal effect, with
+initialization and data variance eliminated by construction — the attribution that makes the rest of the
+paper possible. Both use AdamW (lr $3\times10^{-4}$, weight decay 0.01), batch 48, 10k steps; the
+curriculum raises the maximum level over the first 60% of training. Model: a 4.32M-parameter Qwen2
+replica (d=256, 6 layers, 8/4 grouped-query attention [Ainslie et al. 2023], RoPE [Su et al. 2021],
+SwiGLU, RMSNorm, tied embeddings), with 42 quantizable matrices (attention `q,k,v,o`; MLP
+`gate,up,down`).
 
-A 4.32M-parameter Qwen2 replica: hidden width d=256, 6 layers, 8 attention heads / 4 KV heads
-(head dim 32), SwiGLU MLP (inner 672), RoPE (θ=10⁴), RMSNorm pre-norm, tied input/output embeddings,
-context 192. Each layer has seven quantizable linear maps — attention `q,k,v,o` and MLP `gate,up,down` —
-for **42 quantizable matrices** total.
+**Quantization.** Each matrix is compressed row-wise: for output row $i$, a learned codebook
+$C_i\in\mathbb{R}^k$ of $k$ centroids (initialized at $k$ empirical quantiles of the row) snaps each
+weight to its nearest centroid, $\hat W_{i,c}=C_{i,\,\arg\min_j|W_{i,c}-C_{i,j}|}$ ($k{=}4$ → 2 bits). A
+straight-through estimator [Bengio et al. 2013] keeps the full-precision $W$ trainable, and the codebook
+is learned with a VQ-VAE objective [van den Oord et al. 2017]. Full equations, and a worked numerical
+example with a real weight matrix, are in Appendix A.
 
-### 2.3 Per-row vector quantization (the clustering)
+**Un-cluster toggle.** Because the estimator keeps $W$ alive, setting a component's quantize flag to
+false makes its forward pass use $W$ directly — an exact, retraining-free *leave-one-out un-quantization*
+used for localization (§4.3) and as the basis of the probe (§5).
 
-Each quantizable weight matrix $W \in \mathbb{R}^{d_\text{out}\times d_\text{in}}$ is compressed
-**row-wise**. For output row $i$ we hold a codebook $C_i \in \mathbb{R}^{k}$ of $k$ scalar centroids
-("anchors"). Centroids are **initialized at $k$ evenly spaced empirical quantiles** of that row's
-weights and are thereafter **trainable** (the clustering is learned, not fixed):
-
-$$C_{i,j} \leftarrow \mathrm{Quantile}\!\left(W_{i,:},\; \tfrac{j}{k-1}\right),\quad j=0,\dots,k-1.$$
-
-At every forward pass each weight is snapped to its nearest centroid — a per-row scalar
-$k$-means / vector-quantization step:
-
-$$\hat{W}_{i,c} = C_{i,\,a(i,c)},\qquad a(i,c)=\arg\min_{j}\,\bigl|\,W_{i,c}-C_{i,j}\,\bigr|.$$
-
-With $k$ centroids a weight costs $\log_2 k$ bits; we use $k{=}4$ (**2 bits/weight**), and also crush to
-$k{=}2$ (**1 bit**) as a probe in §5.
-
-### 2.4 Straight-through estimator and the VQ-VAE objective
-
-The forward pass uses the quantized weights $\hat W$, but gradients flow to the full-precision $W$ via a
-straight-through estimator (sg = stop-gradient):
-
-$$W_{\text{ST}} = W + \mathrm{sg}\!\left[\hat W - W\right],\qquad
-\text{forward}=\hat W,\quad \frac{\partial W_{\text{ST}}}{\partial W}=I.$$
-
-Thus the full-precision $W$ is **kept alive alongside the codebook throughout training** — the property
-that later enables free un-clustering (§2.6). The codebook is trained with a per-matrix VQ-VAE objective:
-
-$$\mathcal{L}_{\text{vq}} = \underbrace{\bigl\|\mathrm{sg}[W]-\hat W\bigr\|_2^2}_{\text{codebook: centroids}\to\text{weights}}
-\;+\; \beta\underbrace{\bigl\|W-\mathrm{sg}[\hat W]\bigr\|_2^2}_{\text{commitment: weights}\to\text{centroids}},\qquad \beta=0.25.$$
-
-### 2.5 A worked example (real weights from the trained model)
-
-One real output row of matrix `L1.v`, its learned 2-bit codebook, and the result of snapping each weight
-to its nearest anchor (first ten entries):
-
-| weight $W_{i,c}$ | 0.007 | 0.022 | 0.009 | −0.036 | −0.027 | −0.049 | −0.011 | −0.004 | 0.017 | −0.007 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **2-bit** $\hat W$ (k=4) | 0.006 | 0.037 | 0.006 | −0.020 | −0.020 | −0.055 | −0.020 | 0.006 | 0.006 | 0.006 |
-| **1-bit** $\hat W$ (k=2) | 0.075 | 0.075 | 0.075 | −0.081 | −0.081 | −0.081 | −0.081 | −0.081 | 0.075 | −0.081 |
-
-Learned codebook for this row: k=4 → `{−0.055, −0.020, 0.006, 0.037}`; k=2 → `{−0.081, 0.075}`. Every
-weight is replaced by the nearest allowed value — the entire matrix is representable by 4 (or 2) numbers
-per row plus an index per weight.
-
-Extending this to a 2-D slice makes the clustering visible. Below is a real 12×16 block of the same
-matrix: (A) the full-precision weights (a continuum of values); (B) the same block after 2-bit
-clustering — each row now uses only its four learned anchors, producing visible banding and clipping the
-outliers (e.g. the dark extreme at row 0 is pulled to the row's top anchor); (C) the cluster-assignment
-map, coloring each weight by which of its row's four anchors it snapped to. Clustering is **per row**:
-each row learns its own four centers (they differ slightly row to row, e.g. row 0 `{−0.052,−0.018,
-+0.013,+0.048}` vs. row 10 `{−0.067,−0.025,+0.011,+0.051}`).
-
-![A real weight-matrix slice, full-precision vs. 2-bit clustered, with the per-row cluster-assignment map](runs/matrix_cluster.png)
-
-Concretely, this 12×16 = 192-weight block is stored as 12 per-row codebooks of 4 values (48 numbers)
-plus one 2-bit index per weight — the compression that the rest of the paper shows is *free for lookup
-skills but costly for computation*.
-
-### 2.6 The un-cluster toggle (free leave-one-out un-quantization)
-
-Because the STE keeps $W$ alive, setting a component's quantize flag to false makes its forward pass use
-$W$ directly — an **exact, retraining-free un-quantization**. Toggling it off for one component while all
-others stay quantized is a clean causal *leave-one-out* probe, used for localization in §3 (F4) and as
-the basis of the interpretability tool in §5.
-
-### 2.7 Loss decomposition
-
-Let $\text{ce}_t$ be the per-token cross-entropy and $s_t$ the skill label of target token $t$. The
-per-skill loss and the causal quantization penalty for skill $s$ are
+**Loss decomposition.** With $\text{ce}_t$ the per-token cross-entropy (CE) and $s_t$ the skill label of
+target token $t$,
 
 $$\mathrm{CE}_s=\frac{\sum_t \mathbb{1}[s_t=s]\,\text{ce}_t}{\sum_t \mathbb{1}[s_t=s]},\qquad
 \Delta_s=\mathrm{CE}_s^{\text{target}}-\mathrm{CE}_s^{\text{control}}.$$
 
-Because control and target share initialization and batches (§2.8), $\Delta_s$ is quantization's causal
-effect on skill $s$. We report $\Delta_s$ and the ratio $\mathrm{CE}_s^{\text{target}}/\mathrm{CE}_s^{\text{control}}$.
+Shared initialization and batches make $\Delta_s$ quantization's causal effect on skill $s$.
 
-### 2.8 Paired-lockstep training
+## 4. Results: what breaks, where, and when
 
-We build one fp32 model, deep-copy it, and quantize the copy. Control and target then train from
-**identical initialization on identical batches**, so any loss gap is attributable to quantization
-alone. Control minimizes masked cross-entropy; the target minimizes masked cross-entropy plus
-$\sum_{\text{matrices}}\mathcal{L}_{\text{vq}}$. Both use AdamW (lr $3\times10^{-4}$, weight decay 0.01),
-batch 48, 10k steps; the curriculum raises the maximum level from L1 to L5 over the first 60% of
-training. A single seed is used throughout (a limitation, §8).
+### 4.1 Skill-selectivity (F1)
 
-## 3. Q1 & Q2 — what breaks, and where
-
-**F1 — damage is skill-selective. Verdict: Q1 confirmed (Fig. `grouped.png`).** Converged per-skill
-2-bit penalty (target − control CE): read/semantic/filter/index ≈ 0 (ratios ≤ 0.83×); **content +0.012
-(1.25×)** and **relative +0.030 (1.61×)** are the only real penalties. Retrieval-type skills compress
-for free; computation-type skills pay, and the deeper computation (relative, two-stage) exceeds the
-shallow one (index).
+Converged per-skill 2-bit penalty $\Delta_s$: read/semantic/filter/index $\approx 0$ (ratios $\le 0.83\times$);
+**content $+0.012$ ($1.25\times$)** and **relative $+0.030$ ($1.61\times$)** are the only real penalties.
+Retrieval-type skills compress for free; computation-type skills pay, and the deeper computation
+(relative, a two-stage anchor-then-offset) exceeds the shallow one (index). This is a corollary of the
+mechanism in §4.2.
 
 ![F1 — per-skill 2-bit penalty: computation pays, retrieval is free](runs/grouped.png)
 
-**F2 — damage localizes to the quantity-emitting token (Fig. `exp1a.png`).** In relative traces the
-entire difficulty concentrates on the token emitting the computed position (`pos N`): control CE spikes
-~1000× there and is ~0 elsewhere, and the quant gap rides the same spike (a second emission → a second
-spike). Once a position is written as a token, downstream steps are quant-free — the scratchpad launders
-a fragile computed quantity into a robust symbol.
+### 4.2 The extrapolation mechanism (F3)
 
-![F2 — difficulty and quant damage spike surgically on the `pos N` token](runs/exp1a.png)
-
-**F4 — the fragile computation lives in the value/output path. Verdict: Q2 confirmed, with caveat
-(Fig. `exp2a.png`).** Un-clustering by weight class shows `relative` dominated by the value/output
-projections (~10× Q/K, intensifying OOD), concentrated in early layers; `content` is distributed;
-lookup skills respond to no class. This matches a RoPE account: position is encoded only in Q/K routing
-(consumed by the softmax) and reaches the MLP only after being written into the value stream as
-content — so the value/output path carries the fragile position-content. *Caveat:* straight-through
-co-adaptation confounds the *sign* of whole-class un-clustering; component-level leave-one-out is the
-trustworthy granularity, where magnitude (not sign) is the reliable signal.
-
-![F4 — the fragile computation localizes to the value/output (V/O) weight class](runs/exp2a.png)
-
-## 4. Q3 — one mechanism: quantization is a brittle extrapolator
-
-**F3 — regularizer in-distribution, brittle out-of-distribution. Verdict: Q3 confirmed
-(Fig. `exp1b.png`).** The gap at the quantity-emitting token vs. list length is U-shaped in absolute
-difficulty (minimum at the training mode); the two models cross exactly at the training distribution —
-the quantized target is *better* than fp32 in-distribution (quantization regularizes) and progressively
-*worse* out-of-distribution. Stated as the unifying rule:
+The explanatory core. Measuring the penalty on the quantity-emitting token as a function of list length:
+absolute difficulty is U-shaped (minimum at the training mode), and control and target **cross at the
+training distribution** — the quantized target is *better* than fp32 in-distribution (quantization
+regularizes) and progressively *worse* out-of-distribution. Formally:
 
 > Quantization is free (even regularizing) in-distribution and damages an operation in proportion to how
 > far the **quantity it must compute** extrapolates beyond training.
 
+Skill-selectivity (§4.1) follows immediately: lookup skills have small **bounded** output spaces
+(round/flat, object names) that never extrapolate → free; computation skills produce quantities
+(positions, counts) whose range **grows with input** → fragile OOD.
+
 ![F3 — regularizer in-distribution, brittle out-of-distribution; the models cross at the training range](runs/exp1b.png)
 
-**Verdict on the mechanism (H1-mech): supported.** Skill-selectivity (F1) follows — lookup skills have
-small *bounded* output spaces (round/flat, object names) that never extrapolate → free; computation
-skills produce quantities (positions, counts, offsets) whose range *grows with input* → fragile OOD. F2
-is where the extrapolating quantity is emitted; F4 is where it is stored.
+### 4.3 Localization: token and component (F2, F4)
 
-**A refuted hypothesis (H2-recall: refuted).** We initially proposed a stronger claim — that
-quantization spares knowledge *recall* but damages knowledge-conditioned *identification*
-(recall-and-bind). One experiment (E-a, `exp_ea.png`) appeared to support it. A length-controlled
-follow-up (E-b, `exp_eb.png`), testing each query at its native training length, **refuted it**: a
-recall-and-bind selection was the *most* quantization-robust operation (OOD gaps: position-only +0.85,
-filter+position +0.50, recall+bind +0.09). The apparent effect in E-a was an extrapolation-distance
-confound. The gap tracks how far the computed quantity extrapolates, not whether recall is involved. We
-report this because it is the controlled contrast aggregate metrics cannot make, and because the
-extrapolation claim that survives is the stronger, simpler one.
+**Token level (F2).** In relative traces the entire difficulty concentrates on the token emitting the
+computed position (`pos N`): control CE spikes ~1000× there and is near-zero elsewhere, and the quant
+gap rides the same spike (a second emission → a second spike). Once a position is written as a token,
+downstream steps are quant-free — the scratchpad launders a fragile computed quantity into a robust
+symbol.
+
+![F2 — difficulty and quant damage spike surgically on the `pos N` token](runs/exp1a.png)
+
+**Component level (F4), leave-one-out first.** Un-clustering individual components (the trustworthy,
+retraining-free intervention) shows `relative`'s recoverable penalty concentrated in early-layer
+value/output components. Aggregating to weight classes corroborates: `relative` is dominated by the
+value/output projections (≈10× Q/K), consistent with a RoPE account in which position is consumed by the
+Q/K softmax and reaches the MLP only after being written into the value stream as content. **Caveat,
+stated up front:** whole-class un-clustering is confounded in *sign* by straight-through co-adaptation
+(un-clustering many matrices at once breaks the co-adapted forward pass); we therefore treat class-level
+results as magnitude-only corroboration of the component-level leave-one-out, not as independent causal
+claims.
+
+![F4 — the fragile computation localizes to the value/output (V/O) weight class](runs/exp2a.png)
+
+**Fragility is sensitivity, not compressibility.** A natural alternative — computation matrices are
+simply harder to cluster — is ruled out. The relative quantization error $\lVert W-\hat W\rVert/\lVert W\rVert$
+is uniform across all seven classes (0.31–0.35): every roughly-Gaussian row loses ~1/3 of its energy to
+2-bit rounding regardless of function, and the residual distributions of a fragile value matrix and a
+robust query matrix are identical. Yet elasticity varies four orders of magnitude. Computation matrices
+compress *just as tightly*; they are fragile because the function amplifies the same weight error into a
+larger loss.
+
+![Fragility spans four orders of magnitude while relative quantization error barely varies; fragile and robust matrices cluster equally tightly](runs/exp_cluster_tightness.png)
+
+### 4.4 A falsified alternative (E-a, E-b)
+
+We tested a stronger hypothesis: that quantization spares knowledge *recall* but damages
+knowledge-conditioned *identification* (recall-and-bind). One experiment (E-a) appeared to support it.
+A length-controlled follow-up (E-b), testing each query at its native training length, **falsified it**:
+recall-and-bind was the *most* quantization-robust operation (OOD penalties: position-only $+0.85$,
+filter+position $+0.50$, recall+bind $+0.09$). The apparent effect in E-a was an extrapolation-distance
+confound. This is our clearest evidence that the apparatus distinguishes hypotheses rather than
+reflecting noise, and that the surviving claim is the extrapolation rule, not recall.
 
 ![E-a — the confounded result that *looked* like recall-fragility](runs/exp_ea.png)
 
-![E-b — length-controlled refutation: recall-and-bind is the *most* robust, not the least](runs/exp_eb.png)
+![E-b — length-controlled falsification: recall-and-bind is the *most* robust, not the least](runs/exp_eb.png)
 
-## 5. A quantization-based interpretability probe (H3-tool: validated)
+## 5. The elasticity probe
 
-Define a component's **bit-width elasticity** as the loss increase when it alone is crushed to 1-bit
-(others at 2-bit). Hypothesis: elasticity is a functional fingerprint — discrete/lookup machinery
-tolerates coarsening; analog/computation machinery does not.
+Define a component's **bit-width elasticity** as the loss increase when it alone is crushed to 1-bit.
+Hypothesis: elasticity is a functional fingerprint — discrete/lookup machinery tolerates coarsening;
+analog/computation machinery does not.
 
-**H1 (Fig. `exp_h1.png`).** Crushing a component hurts computation more than lookup for all seven weight
-classes (ratios 1.8–10.2×; 35/42 components individually), and the elasticity map recovers F4's
-value/output localization from a *different* probe. It is not a magnitude artifact (corr(elasticity,
-weight-std) = −0.15).
+**H1.** Crushing a component hurts computation more than lookup for all seven weight classes (ratios
+1.8–10.2×; 35/42 components), the map recovers the value/output localization of §4.3, and it is not a
+magnitude artifact (corr(elasticity, weight-std) = −0.15).
 
 ![H1 — bit-width elasticity map: crushing a component hurts computation more than lookup](runs/exp_h1.png)
 
-**H2 — validation against a non-quantization ground truth (Fig. `exp_h2.png`).** Gradient (Taylor)
-saliency (∂L·W)² on the fp32 control model — no quantization anywhere — split by computation vs. lookup
-loss: all 42 components are more computation-critical than lookup-critical, and per-component saliency
-agrees with quant-elasticity at Spearman ρ = 0.55. The methods agree on the compute-vs-lookup axis but
-weight classes differently — gradients emphasize Q/K (routing has steep *local* gradients), elasticity
-emphasizes V/O (payload is least tolerant to *coarse* rounding). **Verdict: the probe is validated and
-non-redundant** — correlated with, but not reducible to, gradient importance; it captures
-discrete-tolerance structure infinitesimal gradients miss. Un-clustering additionally provides an
-on-manifold ablation primitive, cleaner than zero-ablation.
+**H2 — validation against a non-quantization ground truth, and the ρ=0.55 head-on.** Gradient (Taylor)
+saliency $(\partial L\cdot W)^2$ on the fp32 control — no quantization — ranks all 42 components
+computation-critical over lookup-critical (42/42), and agrees with elasticity at Spearman ρ = 0.55.
+**We confront the moderate ρ directly:** the 42/42 directional agreement is the validation; the imperfect
+*rank* correlation is not noise but *structure* — gradients (a local, infinitesimal measure) rank Q/K
+highest because routing has steep local gradients, whereas elasticity (a global, discrete measure) ranks
+V/O highest because the value payload is least tolerant to coarse rounding. The scatter, colored by
+weight class, shows this disagreement is organized by class, not scattered. A probe perfectly correlated
+with gradients would be redundant; the structured residual is what makes elasticity a distinct tool that
+captures discrete-tolerance a second-order measure misses — the concrete claim in our §2 differentiation
+from HAWQ.
 
-![H2 — the elasticity map agrees with independent gradient importance on the fp32 model (ρ=0.55)](runs/exp_h2.png)
+![H2 — elasticity agrees with independent fp32 gradient importance (ρ=0.55, 42/42), disagreeing in a class-structured way](runs/exp_h2.png)
 
-**Clusterability vs. sensitivity — computation weights are not harder to compress.** A natural
-alternative explanation for skill-selectivity is that computation matrices are simply *harder to
-cluster* — their weights spread out, so 2-bit rounding discards more. We rule this out. The relative
-quantization error $\lVert W-\hat W\rVert/\lVert W\rVert$ is **remarkably uniform across all seven weight
-classes** (0.31–0.35, mean 0.33): every matrix has roughly-Gaussian rows and loses about a third of its
-energy to 2-bit rounding, whether it carries computation or lookup. The residual distributions of a
-*fragile* value matrix (`L1.v`) and a *robust* query matrix (`L0.q`) are essentially identical (below).
-Yet elasticity varies by **four orders of magnitude** across those same matrices. Fragility is therefore
-**not clusterability but sensitivity**: computation matrices compress *just as tightly*, but the function
-they implement amplifies the same relative weight error into a much larger loss change — consistent with
-the steep local gradients on Q/K and V/O in H2. (A weak residual trend survives, Spearman ρ = +0.43
-within the narrow error band, so clusterability contributes only marginally.)
+## 6. Predictions and limitations
 
-![Left: fragility (elasticity) spans 4 orders of magnitude while relative quantization error barely varies (0.31–0.35). Right: a fragile value matrix and a robust query matrix cluster equally tightly — their weight-to-centroid residuals are identical](runs/exp_cluster_tightness.png)
+**Predictions (with their falsification protocol).** The mechanism yields four testable predictions for
+production LLMs; the real-model replication we scope below is designed to falsify them.
+**(P1)** Quantized LLMs keep facts but lose reasoning; aggregate benchmarks underestimate reasoning harm.
+*Already consistent* with reported quantized-model degradation on GSM8K/MATH exceeding that on MMLU
+[Feng et al. 2026; Gong et al. 2026].
+**(P2)** Chain-of-thought is a quantization-robustness mechanism (it keeps computed quantities small and
+in-range); quantized models should benefit disproportionately from explicit intermediate tokens.
+**(P3)** Long-context positional/relational reasoning is a specific casualty, localized to the
+value/output path — motivating *function-guided mixed precision*.
+**(P4)** Quantization regularizes in-distribution but worsens extrapolation, so OOD-free evaluations
+misjudge which quantizer is safe for reasoning.
 
-## 6. Implications for LLMs
+**Falsification protocol.** GPTQ-quantize a small pretrained model (Pythia-160M / Qwen2-0.5B) and measure
+the per-token loss gap on numeric/computed tokens vs. copy tokens; P1 predicts the gap concentrates on
+the former. Extending the per-skill and elasticity analyses to that model tests P3 and the probe's
+transfer.
 
-Testable, falsifiable predictions. **(P1)** Quantized LLMs keep facts (bounded-output recall) but lose
-reasoning (growing-output computation); aggregate benchmarks underestimate reasoning harm. **(P2)**
-Chain-of-thought is a *quantization-robustness* mechanism: writing intermediate results keeps each
-computed quantity small and in-range (F2/F3), so quantized models should benefit disproportionately from
-explicit intermediate tokens. **(P3)** Long-context positional/relational reasoning is a specific
-casualty, localized to the value/output path (F4) — motivating *function-guided mixed precision*: keep
-the computation path precise, crush lookup weights, recover reasoning at lower average bit-width.
-**(P4)** Quantization regularizes at the tails (F3): it can improve in-distribution generalization while
-worsening extrapolation, so OOD-free evaluations misjudge which quantizer is safe for reasoning.
+**Limitations.** A 4.32M synthetic testbed, **single seed**, one bit-width (k=4), one quantizer (learned
+per-row VQ under QAT). Single-seed variance in the quantization interaction is unmeasured; the
+within-run controlled contrasts (lockstep pairing, monotonicity in length, surgical token localization,
+agreement of two independent probes) carry the current evidence, and 3–5 seeds are the first
+strengthening step. QAT-with-STE is the *harder* setting for finding damage (the model adapts around the
+quantizer), so surviving damage is more likely fundamental; a scale/rounding PTQ (GPTQ) ablation would
+test quantizer-generality. Absolute in-distribution CE deltas are small because the task is fully learned
+(ratios and OOD deltas — e.g. $+0.85$ in E-b — are the meaningful units).
 
-## 7. Trustworthy-AI impact (alignment with the OECD AI Principles)
+## 7. Conclusion
 
-Compression is a *governance blind spot*: applied ubiquitously for efficiency, its effect on specific
-capabilities goes undocumented. Our method and probe supply evidence toward three of the five OECD AI
-Principles. (The Principles are values, not a certification; the concrete home for a tool like this is
-the OECD.AI *Catalogue of Tools & Metrics for Trustworthy AI*, under transparency and robustness.)
+On a controlled testbed, low-bit quantization damages computation and spares retrieval, in proportion to
+how far a computed quantity extrapolates beyond training, localized to the value/output path and the
+quantity-emitting tokens; the fragility is functional sensitivity, not weight compressibility. A
+recall-conditioned alternative is falsified by a controlled experiment. The same sensitivity, read as a
+map, is a validated interpretability probe. Finding and tool point to one target: protect the computation
+path, and let the model write its fragile quantities down.
 
-| OECD Principle | What our work contributes | Evidence |
-|---|---|---|
-| **Transparency & Explainability** | Circuit-level localization: *which weights load-bear which skills*, and *which capabilities a compression step changed and where* — a question no aggregate benchmark answers | F1, F2, F4; H1–H2 (the probe) |
-| **Robustness, Security & Safety** | Predicts the *failure surface* before deployment: computation and out-of-distribution/long-context reasoning fail first, while recall is safe — enabling pre-deployment risk assessment aggregate accuracy hides | F1, F3 |
-| **Accountability** | Localized, documented capability-deltas provide audit-trail evidence for model cards and impact assessments (what changed, attributable to which circuits) | F4, H1 |
+## Broader impact
 
-**A concrete governance example.** A public agency plans to deploy a *quantized* language model to help
-triage benefit applications. Before deployment it runs the probe and finds that multi-step reasoning
-over long case histories is a fragile, computation-heavy circuit that degrades under 2-bit compression,
-while factual recall is untouched. The trustworthiness assessment can now document: *compression is safe
-for lookup-style tasks but degrades long-context reasoning; keep the reasoning-critical weight path in
-higher precision (function-guided mixed precision); route complex cases to the full-precision model.*
-That is a transparency + robustness + accountability decision the agency can defend — enabled by the
-tool, not by aggregate accuracy.
-
-**Honest bound.** This supports the *transparency and robustness* slice of trustworthiness; it is not a
-fairness or societal-impact measure, and it is validated on a testbed (see §8). As a *tool aligned with*
-the OECD Principles it is defensible today; as a *deployed governance instrument* it awaits the
-real-model replication.
-
-## 8. Limitations and scope
-
-We state these plainly. The testbed is a 4.32M synthetic model, one seed, one bit-width (k=4), one
-quantizer (our VQ, not GPTQ/AWQ). Absolute CE effects are small because the task is fully learned — the
-signal is in ratios, localization, and controlled contrasts, not raw magnitude. The probe is a
-per-component scalar (coarse), with leave-one-out as its clean causal granularity. **The single
-strongest strengthening step is a real-model replication** (Pythia-160M / Qwen2-0.5B with GPTQ) testing
-whether skill-selectivity, value-path localization, and elasticity-based functional mapping transfer;
-we position this as the direct route from a controlled mechanistic result to production generality, and
-predict (P1–P4) what it should find.
-
-## 9. Conclusion
-
-Three verdicts. Low-bit quantization damages *computation* and spares *retrieval* (Q1), in proportion to
-how far a computed quantity extrapolates beyond training (Q3), localized to the value/output path and
-the quantity-emitting tokens (Q2). A stronger recall-specific hypothesis was refuted by a controlled
-experiment. The same sensitivity, read as a map, is a *validated* interpretability probe for separating
-computation from lookup machinery. Both the finding and the tool point to one actionable target: protect
-the computation path, and let the model write its fragile quantities down.
-
-## 10. Glossary — abbreviations and notation
-
-*Everything abbreviated in this paper, in plain language.*
-
-**Quantization and training**
-
-| Term | Meaning |
-|---|---|
-| **quantization** | Compressing a model by rounding each weight to one of a small set of allowed values (fewer bits per weight). |
-| **CE** | Cross-entropy — the standard next-token training/evaluation loss. Lower = the model is less "surprised" = better. |
-| **bit / k / bit-width** | A codebook of `k` allowed values costs `log₂k` bits per weight. `k=4` → 2 bits; `k=2` → 1 bit. |
-| **fp32** | 32-bit floating point — full precision. Our uncompressed "control" model. |
-| **VQ** | Vector quantization — replacing each weight with the nearest entry in a small learned *codebook*. |
-| **codebook / centroid / anchor** | The small set of allowed values (here, per matrix-row) that weights are snapped to. |
-| **VQ-VAE** | Vector-Quantized Variational Auto-Encoder — the origin of the *codebook + commitment* loss we use (§2.4). |
-| **STE** | Straight-Through Estimator — a trick that lets gradients flow through the (non-differentiable) rounding step, keeping the full-precision weights trainable. |
-| **sg[·]** | Stop-gradient — an operation that blocks gradients from flowing (used inside the VQ loss). |
-| **QAT** | Quantization-Aware Training — training with quantization simulated in the forward pass (our setting). |
-| **PTQ** | Post-Training Quantization — quantizing a finished model without further training (e.g. GPTQ, AWQ). |
-| **β (beta)** | Weight on the commitment term of the VQ loss (we use 0.25). |
-| **un-clustering** | Turning quantization *off* for one component so it uses its full-precision weight — free because the STE kept that weight alive (§2.6). |
-
-**Named prior quantization methods** (cited for context in §1 Positioning)
-
-| Term | Meaning |
-|---|---|
-| **GPTQ** | A widely used one-shot post-training weight quantizer. |
-| **AWQ** | Activation-aware Weight Quantization — protects the weights that see large activations. |
-| **BitNet** | An approach to training LLMs at ~1 bit per weight. |
-| **GPTVQ** | A post-training *vector*-quantization method. |
-| **AQLM** | Additive Quantization for Language Models — multi-codebook PTQ. |
-| **HAWQ** | Hessian-AWare Quantization — assigns bit-widths by second-order sensitivity (related measurement to our probe, different framing). |
-
-**Model architecture**
-
-| Term | Meaning |
-|---|---|
-| **LLM** | Large Language Model. |
-| **MLP** | Multi-Layer Perceptron — the feed-forward block; here its three maps are *gate, up, down*. |
-| **Q, K, V, O** | The Query, Key, Value, and Output projection matrices inside attention. |
-| **GQA / KV heads** | Grouped-Query Attention — fewer Key/Value heads than Query heads (8 Q / 4 KV here). |
-| **RoPE** | Rotary Position Embedding — encodes token position by rotating Q and K (not V — central to §3's mechanism). |
-| **RMSNorm** | Root-Mean-Square normalization. |
-| **SwiGLU** | A gated feed-forward activation (Swish gate). |
-| **d / head dim** | Hidden width (256) / per-head width (32). |
-
-**Analysis and interpretability**
-
-| Term | Meaning |
-|---|---|
-| **OOD** | Out-Of-Distribution — inputs beyond the training range (here, lists longer than seen in training). |
-| **`pos N`** | A scratchpad token where the model writes a computed *position* as a number (e.g. `pos 4`). The hardest, most fragile step (§3). |
-| **SAE** | Sparse Autoencoder — the mainstream interpretability method, which operates on *activations* (we operate on *weights*). |
-| **bit-width elasticity** | Our probe: how much the loss rises when one component alone is crushed to 1 bit. High = it does fragile computation (§5). |
-| **Taylor / gradient saliency** | `(∂L·W)²` — a standard importance measure, used as our independent (non-quantization) validation (§5, H2). |
-| **ρ (rho)** | Spearman rank correlation — agreement between two rankings (1 = identical order). |
-| **Δₛ (Delta)** | The quantization penalty for skill *s* = (target CE − control CE) on that skill's tokens (§2.7). |
-
-**Labels used in this paper**
-
-| Term | Meaning |
-|---|---|
-| **Q1 / Q2 / Q3** | The three research questions (what breaks / where / when). |
-| **F1–F4** | The four main findings (skill-selectivity / token localization / regularizer-brittle / value-path). |
-| **E-a, E-b** | The experiment pair that tested and *refuted* the "recall-and-bind" hypothesis. |
-| **H1, H2** | The interpretability-tool experiments (elasticity map; non-quantization validation). |
-| **P1–P4** | The four testable predictions for production LLMs (§6). |
-| **L1–L5** | Curriculum difficulty levels (bands of list length). |
-| **the six skills** | read, semantic, filter, index, content, relative (defined in §2.1). |
-
-**Policy / governance**
-
-| Term | Meaning |
-|---|---|
-| **OECD** | Organisation for Economic Co-operation and Development — the intergovernmental body whose *AI Principles* define trustworthy-AI values. |
-| **OECD AI Principles** | Human-centred, transparent, robust/safe, accountable, inclusive AI (§7). |
-| **OECD.AI Catalogue of Tools & Metrics** | The OECD's public repository of practical trustworthy-AI tools — the concrete home for a probe like ours. |
+Compression is a governance blind spot: applied ubiquitously for efficiency, its effect on specific
+capabilities goes undocumented, so a compressed model can look "97% as good" while having lost a
+capability that matters. Our method makes that effect *auditable* — which capabilities a compression step
+changed, and where — and predicts the failure surface (computation and long-context reasoning fail first,
+recall is safe). This supplies transparency and robustness evidence of the kind trustworthy-AI frameworks
+call for (e.g. the OECD AI Principles' transparency, robustness, and accountability aims; the
+tool-and-metric layer catalogued by the OECD.AI Policy Observatory), and a concrete mitigation
+(function-guided mixed precision; route hard cases to full precision). It addresses the transparency and
+robustness slice of trustworthiness, not fairness or societal-impact, and is validated on a testbed
+pending real-model replication. Appendix F expands the principle-by-principle mapping.
 
 ---
-*Figures: `grouped.png` (F1), `exp1a.png` (F2), `exp1b.png` (F3), `exp2a.png` (F4), `exp_ea.png`/`exp_eb.png` (E-a/E-b, H2-recall refuted), `exp_h1.png`/`exp_h2.png` (H3-tool). Reproduce from `ckpt.pt` with `exp_*.py`.*
+
+## Next immediate steps (project roadmap — not part of the submission)
+
+*Pick from these; ordered by how much each moves the accept/reject line, per the review.*
+
+1. **Seeds (R1) — the top priority; needs GPU (~$15, hours).** Run 3–5 seeds of the paired-lockstep
+   training; report mean ± std on every $\Delta_s$ and on the elasticity map. This is the one objection
+   with no prose rebuttal. *Blocker: too slow on the current CPU (~7h/run); needs a rented GPU.*
+2. **Real-model PTQ experiment (R2) — converts "toy" to "validated mechanism."** GPTQ-quantize
+   Pythia-160M; show the per-token loss gap concentrates on numeric/computed tokens vs. copy tokens.
+   Even a rough version defuses the scale objection more than any prose. *Feasible on CPU but heavy;
+   cleaner on GPU.*
+3. **Real-model per-skill + elasticity transfer (extends #2).** Run the per-skill decomposition and the
+   elasticity probe on the same small model — tests P3 and the probe's transfer directly.
+4. **PTQ ablation on the testbed (R3).** Quantize the *testbed* model with a GPTQ-style rounding
+   quantizer (no learned codebook) and check the computation-vs-lookup dissociation still holds — tests
+   quantizer-generality. *Checkpoint-adjacent; moderate.*
+5. **References pass.** Verify every citation below against the originals (arXiv IDs/years from memory
+   may be imperfect) and add any missing quantization-hurts-reasoning refs.
+6. **Two-build split.** Produce the OECD-framed build (restore executive summary + full §7) from this
+   same source, for the policy audience, keeping this file as the NeurIPS build.
+7. **Appendix polish.** Fill Appendices A–F (VQ details + worked example already drafted; hyperparameters;
+   full per-component tables; E-a/E-b full analysis; glossary; OECD mapping; R1–R8 rebuttals).
+
+---
+
+## References
+
+*Citation details (arXiv IDs, years, venues) should be verified against the originals before submission —
+see roadmap step 5.*
+
+- Ainslie et al. **GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints.** EMNLP 2023. arXiv:2305.13245.
+- Bengio, Léonard, Courville. **Estimating or Propagating Gradients Through Stochastic Neurons.** 2013. arXiv:1308.3432.
+- Bricken et al. **Towards Monosemanticity: Decomposing Language Models with Dictionary Learning.** Anthropic, 2023.
+- Cunningham et al. **Sparse Autoencoders Find Highly Interpretable Features in Language Models.** 2023. arXiv:2309.08600.
+- Dong et al. **HAWQ: Hessian AWare Quantization of Neural Networks with Mixed-Precision.** ICCV 2019. arXiv:1905.03696.
+- Egiazarian et al. **Extreme Compression of Large Language Models via Additive Quantization (AQLM).** ICML 2024. arXiv:2401.06118.
+- Feng et al. **Quantization Meets Reasoning: Exploring LLM Low-Bit Quantization Degradation for Mathematical Reasoning.** 2026. arXiv:2501.03035.
+- Frantar et al. **GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers.** ICLR 2023. arXiv:2210.17323.
+- Geva et al. **Transformer Feed-Forward Layers Are Key-Value Memories.** EMNLP 2021. arXiv:2012.14913.
+- Gong et al. **Which Quantization Should I Use? A Unified Evaluation of llama.cpp Quantization on Llama-3.1-8B-Instruct.** 2026. arXiv:2601.14277.
+- Kim et al. **Benchmarking Post-Training Quantization in LLMs.** 2025. arXiv:2502.13178.
+- Lin et al. **AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration.** MLSys 2024. arXiv:2306.00978.
+- Ma et al. **The Era of 1-bit LLMs: All Large Language Models are in 1.58 Bits (BitNet b1.58).** 2024. arXiv:2402.17764.
+- Nye et al. **Show Your Work: Scratchpads for Intermediate Computation with Language Models.** 2021. arXiv:2112.00114.
+- Olsson et al. **In-context Learning and Induction Heads.** Anthropic, 2022. arXiv:2209.11895.
+- Su et al. **RoFormer: Enhanced Transformer with Rotary Position Embedding.** 2021. arXiv:2104.09864.
+- van Baalen et al. **GPTVQ: The Blessing of Dimensionality for LLM Quantization.** 2024. arXiv:2402.15319.
+- van den Oord, Vinyals, Kavukcuoglu. **Neural Discrete Representation Learning (VQ-VAE).** NeurIPS 2017. arXiv:1711.00937.
+- Xiao et al. **SmoothQuant: Accurate and Efficient Post-Training Quantization for LLMs.** ICML 2023. arXiv:2211.10438.
+
+---
+*Figures: `grouped.png` (F1), `exp1b.png` (F3), `exp1a.png` (F2), `exp2a.png` (F4),
+`exp_cluster_tightness.png` (sensitivity vs. clusterability), `exp_ea.png`/`exp_eb.png` (E-a/E-b),
+`exp_h1.png`/`exp_h2.png` (probe), `matrix_cluster.png` (Appendix A). Reproduce from `ckpt.pt` with
+`exp_*.py`. Appendices A–F and the glossary are maintained separately in the repository.*

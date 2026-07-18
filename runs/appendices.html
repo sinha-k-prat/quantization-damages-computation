@@ -1,0 +1,148 @@
+<meta charset=utf-8><title>Appendices</title><script>MathJax={tex:{inlineMath:[['$','$']],displayMath:[['$$','$$']]}};</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script><style>
+body{font:16px/1.7 -apple-system,sans-serif;max-width:800px;margin:0 auto;padding:30px 20px 80px;color:#222;background:#fbfaf7}
+h1{font-size:25px} h2{font-size:20px;margin-top:1.8em;border-bottom:2px solid #c9a227;padding-bottom:4px} h3{font-size:16px}
+code{background:#eee;padding:1px 4px;border-radius:3px;font-size:.88em} pre{background:#2d2d2d;color:#eee;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px}
+blockquote{border-left:4px solid #c9a227;background:#f7f2e8;margin:1em 0;padding:8px 16px;border-radius:5px}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:1em 0} td,th{border:1px solid #ddd;padding:5px 8px;text-align:left;vertical-align:top} th{background:#f3efe6}
+figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px} hr{border:none;border-top:1px solid #ddd;margin:2em 0}</style>
+<h1>Appendices — <i>Quantization Damages Computation, Not Retrieval</i></h1>
+
+<p>Supporting material for <code>DRAFT.md</code>. Abbreviations: Appendix E.</p>
+
+<h2>Appendix A — Quantization details and a worked example</h2>
+
+<p><b>Per-row vector quantization.</b> Each quantizable matrix $W\in\mathbb{R}^{d_\text{out}\times d_\text{in}}$</p>
+<p>is compressed row-wise. For output row $i$, a codebook $C_i\in\mathbb{R}^k$ of $k$ centroids is</p>
+<p>initialized at $k$ evenly spaced empirical quantiles of the row and thereafter trained:</p>
+
+$$C_{i,j}\leftarrow\mathrm{Quantile}\!\left(W_{i,:},\tfrac{j}{k-1}\right),\quad j=0,\dots,k-1.$$
+
+<p>Each weight snaps to its nearest centroid, $\hat W_{i,c}=C_{i,\,a(i,c)}$ with</p>
+<p>$a(i,c)=\arg\min_j|W_{i,c}-C_{i,j}|$. A weight costs $\log_2 k$ bits; $k{=}4$ → 2 bits, $k{=}2$ → 1 bit.</p>
+
+<p><b>Straight-through estimator (STE)</b> [Bengio et al. 2013]:</p>
+
+$$W_{\text{ST}}=W+\mathrm{sg}[\hat W-W],\qquad\text{forward}=\hat W,\quad\partial W_{\text{ST}}/\partial W=I,$$
+
+<p>so the full-precision $W$ trains through the non-differentiable rounding — the property enabling the</p>
+<p>un-cluster toggle.</p>
+
+<p><b>VQ-VAE objective</b> [van den Oord et al. 2017], per matrix:</p>
+
+$$\mathcal{L}_{\text{vq}}=\underbrace{\lVert\mathrm{sg}[W]-\hat W\rVert_2^2}_{\text{codebook}}+\beta\underbrace{\lVert W-\mathrm{sg}[\hat W]\rVert_2^2}_{\text{commitment}},\qquad\beta=0.25.$$
+
+<p>The target model minimizes masked CE $+\sum_\text{matrices}\mathcal{L}_{\text{vq}}$.</p>
+
+<p><b>Worked example (real weights).</b> One output row of matrix <code>L1.v</code>, its learned codebooks, and the</p>
+<p>snapped values (first ten entries):</p>
+
+<table><tr><th>weight $W_{i,c}$</th><th>0.007</th><th>0.022</th><th>0.009</th><th>−0.036</th><th>−0.027</th><th>−0.049</th><th>−0.011</th><th>−0.004</th><th>0.017</th><th>−0.007</th></tr>
+<tr><td><b>2-bit</b> $\hat W$ (k=4)</td><td>0.006</td><td>0.037</td><td>0.006</td><td>−0.020</td><td>−0.020</td><td>−0.055</td><td>−0.020</td><td>0.006</td><td>0.006</td><td>0.006</td></tr>
+<tr><td><b>1-bit</b> $\hat W$ (k=2)</td><td>0.075</td><td>0.075</td><td>0.075</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>−0.081</td><td>0.075</td><td>−0.081</td></tr>
+</table>
+
+<p>Codebooks: k=4 → <code>{−0.055,−0.020,0.006,0.037}</code>; k=2 → <code>{−0.081,0.075}</code>. Clustering is <b>per-row</b> (each</p>
+<p>row learns its own centers). A real 12×16 slice, full-precision vs. 2-bit vs. the cluster-assignment map:</p>
+
+<figure><img src="runs/matrix_cluster.png"><figcaption>A real weight-matrix slice: full precision (A), 2-bit clustered with visible banding (B), and the per-row cluster-assignment map (C)</figcaption></figure>
+
+<p>The 192-weight block is stored as 12 codebooks of 4 values (48 numbers) plus one 2-bit index per weight.</p>
+
+<h2>Appendix B — Hyperparameters</h2>
+
+<table><tr><th></th><th></th></tr>
+<tr><td>Model</td><td>d=256, 6 layers, 8 heads / 4 KV, head dim 32, SwiGLU inner 672, context 192, tied embeddings</td></tr>
+<tr><td>Params</td><td>4.32M; 42 quantizable matrices (7 per layer)</td></tr>
+<tr><td>Quantizer</td><td>per-row VQ, k=4 (2-bit), STE, VQ-VAE loss β=0.25</td></tr>
+<tr><td>Optimizer</td><td>AdamW, lr 3×10⁻⁴, weight decay 0.01, batch 48</td></tr>
+<tr><td>Steps</td><td>10,000; curriculum L1→L5 over first 60%</td></tr>
+<tr><td>Seed</td><td>1 (single-seed; see §6)</td></tr>
+<tr><td>Data</td><td>curriculum lengths 3–5 … 9–12; OOD 13–24</td></tr>
+</table>
+
+<h2>Appendix C — Per-component and per-class tables</h2>
+
+<p>Full per-component leave-one-out recovery and elasticity values are in <code>runs/logs/</code> (<code>exp_uncluster.log</code>,</p>
+<p><code>exp_uncluster_ood.log</code>, <code>exp_h1.log</code>, <code>exp_h2.log</code>); consolidated numbers in <code>runs/RESULTS.md</code>.</p>
+<p>Class-average elasticity (compute vs. lookup CE rise, 1-bit crush): V 0.087 / O 0.092 ≫ MLP, gate, up,</p>
+<p>down ≤0.031 ≫ Q, K. Relative quantization error by class: 0.319–0.344 (uniform).</p>
+
+<h2>Appendix D — E-a / E-b full analysis</h2>
+
+<p>E-a (identification token, in-dist vs OOD): EXPLICIT (pos of named anchor) +0.030 / −0.174; IMPLICIT</p>
+<p>(shape-selected object) +0.005 / +0.525 — the OOD implicit penalty <i>looked</i> like recall-fragility. E-b</p>
+<p>(matched object readout at native length; OOD penalty): T1 position +0.85, T3 filter+position +0.50, T4</p>
+<p>recall+bind +0.09 — recall+bind is most robust. The OOD penalty tracks OOD control CE (6.66 / 1.95 /</p>
+<p>0.47), i.e. extrapolation distance of the computed quantity, not recall. Two failed E-b designs</p>
+<p>(common-length; native-length) established that per-query training length and index magnitude are the</p>
+<p>confounds. Conclusion: recall is not a distinct fragility axis; F5 (recall-and-bind) retracted.</p>
+
+<h2>Appendix E — Glossary of abbreviations and notation</h2>
+
+<p><b>Quantization / training.</b> <b>CE</b> cross-entropy loss (lower = better). <b>VQ</b> vector quantization</p>
+<p>(snap weights to a small codebook). <b>codebook/centroid/anchor</b> the allowed values per row. <b>VQ-VAE</b></p>
+<p>the codebook+commitment loss we use. <b>STE</b> straight-through estimator (gradients pass through</p>
+<p>rounding). <b>sg[·]</b> stop-gradient. <b>QAT / PTQ</b> quantization-aware / post-training quantization.</p>
+<p><b>fp32</b> full precision. <b>bit / k</b> a k-value codebook costs log₂k bits (k=4→2 bits). <b>β</b> commitment</p>
+<p>weight (0.25). <b>un-clustering</b> turning quantization off for one component (uses fp32 W).</p>
+
+<p><b>Prior methods.</b> <b>GPTQ</b> error-correcting PTQ. <b>AWQ</b> activation-aware PTQ. <b>SmoothQuant</b> outlier</p>
+<p>migration. <b>GPTVQ / AQLM</b> vector-quantization PTQ. <b>BitNet</b> ~1-bit training. <b>HAWQ</b> Hessian-aware</p>
+<p>mixed-precision (nearest neighbor; §2).</p>
+
+<p><b>Architecture.</b> <b>LLM</b> large language model. <b>MLP</b> feed-forward block (gate/up/down). <b>Q,K,V,O</b></p>
+<p>attention query/key/value/output projections. <b>GQA</b> grouped-query attention. <b>RoPE</b> rotary position</p>
+<p>embedding (rotates Q,K not V). <b>RMSNorm / SwiGLU</b> normalization / gated activation. <b>d</b> hidden width.</p>
+
+<p><b>Analysis.</b> <b>OOD</b> out-of-distribution (longer lists). <b><code>pos N</code></b> scratchpad token writing a computed</p>
+<p>position. <b>SAE</b> sparse autoencoder (activation-level interpretability). <b>bit-width elasticity</b> loss</p>
+<p>rise when a component is crushed to 1-bit. <b>Taylor/gradient saliency</b> (∂L·W)². <b>ρ</b> Spearman rank</p>
+<p>correlation. <b>Δₛ</b> per-skill quant penalty (target−control CE).</p>
+
+<p><b>Labels.</b> <b>Q1–Q3</b> research questions. <b>F1–F4</b> findings. <b>E-a/E-b</b> the refuted-hypothesis</p>
+<p>experiment. <b>H1/H2</b> probe experiments. <b>P1–P4</b> predictions. <b>L1–L5</b> curriculum levels. **six</p>
+<p>skills** read, semantic, filter, index, content, relative.</p>
+
+<p><b>Policy.</b> <b>OECD</b> Organisation for Economic Co-operation and Development. <b>OECD AI Principles</b></p>
+<p>trustworthy-AI values. <b>OECD.AI Catalogue of Tools &amp; Metrics</b> the repository of practical</p>
+<p>trustworthy-AI tools.</p>
+
+<h2>Appendix F — OECD AI Principles mapping (expanded)</h2>
+
+<table><tr><th>OECD Principle</th><th>Contribution</th><th>Evidence</th></tr>
+<tr><td><b>Transparency &amp; Explainability</b></td><td>Circuit-level localization: which weights load-bear which skills, and which capabilities a compression step changed and where</td><td>F1, F2, F4; H1–H2</td></tr>
+<tr><td><b>Robustness, Security &amp; Safety</b></td><td>Predicts the failure surface before deployment: computation and OOD/long-context reasoning fail first, recall is safe</td><td>F1, F3</td></tr>
+<tr><td><b>Accountability</b></td><td>Localized, documented capability-deltas as audit-trail evidence for model cards / impact assessments</td><td>F4, H1</td></tr>
+</table>
+
+<p><i>Governance example.</i> A public agency deploying a quantized model to triage benefit applications runs the</p>
+<p>probe pre-deployment and finds multi-step reasoning over long case histories is a fragile,</p>
+<p>computation-heavy circuit that degrades under 2-bit compression while factual recall is untouched. It can</p>
+<p>then document: compression is safe for lookup-style tasks but degrades long-context reasoning; keep the</p>
+<p>reasoning-critical weight path in higher precision; route complex cases to full precision. <i>Bound:</i> this</p>
+<p>supports the transparency/robustness slice of trustworthiness, not fairness or societal impact, and is</p>
+<p>validated on a testbed pending real-model replication.</p>
+
+<h2>Appendix G — Anticipated objections and responses (R1–R8)</h2>
+
+<p style='margin-left:1em'>• <b>R1 (single seed).</b> No prose rebuttal; 3–5 seeds are the fix (roadmap #1). Within-run controlled</p>
+<p>  contrasts (lockstep, monotonic-in-length F3, surgical token localization F2, two independent probes)</p>
+<p>  carry the current evidence.</p>
+<p style='margin-left:1em'>• <b>R2 (toy / synthetic).</b> The claim is mechanistic; controlled dissociation is impossible at scale.</p>
+<p>  P1 is already consistent with published GSM8K-vs-MMLU quantization degradation [Feng et al. 2026]. A</p>
+<p>  small GPTQ per-token experiment on Pythia-160M (roadmap #2) is the direct strengthening.</p>
+<p style='margin-left:1em'>• <b>R3 (nonstandard quantizer).</b> The mechanism (bounded vs. growing output ranges) is quantizer-agnostic;</p>
+<p>  QAT-with-STE is the <i>harder</i> setting for finding damage. A PTQ ablation on the testbed (roadmap #4)</p>
+<p>  tests generality.</p>
+<p style='margin-left:1em'>• <b>R4 (HAWQ?).</b> HAWQ is a compression budget; we add per-skill causal decomposition, the extrapolation</p>
+<p>  mechanism, and the demonstration (H2) that elasticity captures discrete-tolerance a second-order</p>
+<p>  measure misses.</p>
+<p style='margin-left:1em'>• <b>R5 (co-adaptation caveat undermines F4).</b> Restructured: leave-one-out is primary, class-level is</p>
+<p>  magnitude-only corroboration; the caveat applies to sign of a secondary analysis.</p>
+<p style='margin-left:1em'>• <b>R6 (ρ=0.55 weak).</b> 42/42 directional agreement is the validation; the structured (class-organized)</p>
+<p>  residual is a finding, not noise. See the H2 scatter.</p>
+<p style='margin-left:1em'>• <b>R7 (small CE deltas).</b> On a fully-learned task, ratios and OOD deltas (+0.85, E-b) are the meaningful</p>
+<p>  units; converged control CE is near zero.</p>
+<p style='margin-left:1em'>• <b>R8 (weights not activations).</b> Complementary granularity: SAEs decompose what is represented, the</p>
+<p>  probe fingerprints what a component does; useful as cheap triage before activation-level tools.</p>
