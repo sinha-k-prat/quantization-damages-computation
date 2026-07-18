@@ -3,8 +3,8 @@ body{font:16px/1.7 -apple-system,sans-serif;max-width:800px;margin:0 auto;paddin
 h1{font-size:25px;line-height:1.25} h2{font-size:20px;margin-top:1.8em;border-bottom:2px solid #c9a227;padding-bottom:4px}
 h3{font-size:16px;color:#333} code{background:#eee;padding:1px 4px;border-radius:3px;font-size:.88em}
 blockquote{border-left:4px solid #c9a227;background:#f7f2e8;margin:1em 0;padding:8px 16px;border-radius:5px}
-table{border-collapse:collapse;width:100%;font-size:13.5px;margin:1em 0}
-td,th{border:1px solid #ddd;padding:5px 9px;text-align:left} th{background:#f3efe6}
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:1em 0} td,th{border:1px solid #ddd;padding:5px 9px;text-align:left} th{background:#f3efe6}
+figure{margin:1.2em 0} img{width:100%;border:1px solid #e0dccf;border-radius:8px} figcaption{color:#777;font-size:13.5px;margin-top:4px}
 hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <h1>Quantization Damages Computation, Not Retrieval: A Controlled Dissociation and a Quantization-Based Interpretability Probe</h1>
 
@@ -110,11 +110,15 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>for free; computation-type skills pay, and the deeper computation (relative, two-stage) exceeds the</p>
 <p>shallow one (index).</p>
 
+<figure><img src="runs/grouped.png"><figcaption>F1 — per-skill 2-bit penalty: computation pays, retrieval is free</figcaption></figure>
+
 <p><b>F2 — damage localizes to the quantity-emitting token (Fig. <code>exp1a.png</code>).</b> In relative traces the</p>
 <p>entire difficulty concentrates on the token emitting the computed position (<code>pos N</code>): control CE spikes</p>
 <p>~1000× there and is ~0 elsewhere, and the quant gap rides the same spike (a second emission → a second</p>
 <p>spike). Once a position is written as a token, downstream steps are quant-free — the scratchpad launders</p>
 <p>a fragile computed quantity into a robust symbol.</p>
+
+<figure><img src="runs/exp1a.png"><figcaption>F2 — difficulty and quant damage spike surgically on the `pos N` token</figcaption></figure>
 
 <p>**F4 — the fragile computation lives in the value/output path. Verdict: Q2 confirmed, with caveat</p>
 <p>(Fig. <code>exp2a.png</code>).** Un-clustering by weight class shows <code>relative</code> dominated by the value/output</p>
@@ -124,6 +128,8 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>content — so the value/output path carries the fragile position-content. <i>Caveat:</i> straight-through</p>
 <p>co-adaptation confounds the <i>sign</i> of whole-class un-clustering; component-level leave-one-out is the</p>
 <p>trustworthy granularity, where magnitude (not sign) is the reliable signal.</p>
+
+<figure><img src="runs/exp2a.png"><figcaption>F4 — the fragile computation localizes to the value/output (V/O) weight class</figcaption></figure>
 
 <h2>4. Q3 — one mechanism: quantization is a brittle extrapolator</h2>
 
@@ -135,6 +141,8 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 
 <blockquote>Quantization is free (even regularizing) in-distribution and damages an operation in proportion to how</blockquote>
 <blockquote>far the <b>quantity it must compute</b> extrapolates beyond training.</blockquote>
+
+<figure><img src="runs/exp1b.png"><figcaption>F3 — regularizer in-distribution, brittle out-of-distribution; the models cross at the training range</figcaption></figure>
 
 <p><b>Verdict on the mechanism (H1-mech): supported.</b> Skill-selectivity (F1) follows — lookup skills have</p>
 <p>small <i>bounded</i> output spaces (round/flat, object names) that never extrapolate → free; computation</p>
@@ -151,6 +159,10 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>report this because it is the controlled contrast aggregate metrics cannot make, and because the</p>
 <p>extrapolation claim that survives is the stronger, simpler one.</p>
 
+<figure><img src="runs/exp_ea.png"><figcaption>E-a — the confounded result that *looked* like recall-fragility</figcaption></figure>
+
+<figure><img src="runs/exp_eb.png"><figcaption>E-b — length-controlled refutation: recall-and-bind is the *most* robust, not the least</figcaption></figure>
+
 <h2>5. A quantization-based interpretability probe (H3-tool: validated)</h2>
 
 <p>Define a component&#x27;s <b>bit-width elasticity</b> as the loss increase when it alone is crushed to 1-bit</p>
@@ -162,6 +174,8 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>value/output localization from a <i>different</i> probe. It is not a magnitude artifact (corr(elasticity,</p>
 <p>weight-std) = −0.15).</p>
 
+<figure><img src="runs/exp_h1.png"><figcaption>H1 — bit-width elasticity map: crushing a component hurts computation more than lookup</figcaption></figure>
+
 <p><b>H2 — validation against a non-quantization ground truth (Fig. <code>exp_h2.png</code>).</b> Gradient (Taylor)</p>
 <p>saliency (∂L·W)² on the fp32 control model — no quantization anywhere — split by computation vs. lookup</p>
 <p>loss: all 42 components are more computation-critical than lookup-critical, and per-component saliency</p>
@@ -171,6 +185,8 @@ hr{border:none;border-top:1px solid #ddd;margin:2em 0} p{margin:.55em 0}</style>
 <p>non-redundant** — correlated with, but not reducible to, gradient importance; it captures</p>
 <p>discrete-tolerance structure infinitesimal gradients miss. Un-clustering additionally provides an</p>
 <p>on-manifold ablation primitive, cleaner than zero-ablation.</p>
+
+<figure><img src="runs/exp_h2.png"><figcaption>H2 — the elasticity map agrees with independent gradient importance on the fp32 model (ρ=0.55)</figcaption></figure>
 
 <h2>6. Implications for LLMs</h2>
 
