@@ -271,10 +271,19 @@ value/output path — motivating *function-guided mixed precision*.
 **(P4)** Quantization regularizes in-distribution but worsens extrapolation, so OOD-free evaluations
 misjudge which quantizer is safe for reasoning.
 
-**Falsification protocol.** GPTQ-quantize a small pretrained model (Pythia-160M / Qwen2-0.5B) and measure
-the per-token loss gap on numeric/computed tokens vs. copy tokens; P1 predicts the gap concentrates on
-the former. Extending the per-skill and elasticity analyses to that model tests P3 and the probe's
-transfer.
+**Preliminary real-model replication (P1).** We ran the falsification test. On **Qwen2.5-0.5B-Instruct**
+quantized to 4-bit (per-channel uniform), evaluated on real **GSM8K** solutions with tokens labeled
+*computation* (the result of an arithmetic step, right of `=` or after `####`), *copy* (a number verbatim
+from the question), or *language*, the per-token-type degradation (quantized/fp cross-entropy ratio) is
+**computation 4.5× > copy 2.5× > language 1.6×** — a monotonic ordering matching P1, with the
+computed-vs-copied contrast holding *within the same sentences*. It **replicates across two independent
+quantizers** (our per-row VQ: 12.8×/6.4×/4.1×; per-channel uniform: 4.5×/2.5×/1.6× — same ordering,
+ratio-of-ratios 2.0× vs. 1.8×), so the selectivity is not an artifact of a single method; and 8-bit
+quantization is near-lossless (all ratios 1.0×), confirming the effect is specific to aggressive
+compression, not the pipeline. Task success degrades in step (GSM8K exact-match roughly halved) without
+full collapse. We label this **pilot-strength**: single model, calibration-free quantization, small
+evaluation sets; the confirmatory version is GPTQ with a bit-width sweep and per-arithmetic-complexity EM
+(§ pre-registration).
 
 **Limitations.** A 4.32M synthetic testbed, **single seed**, one bit-width (k=4), one quantizer (learned
 per-row VQ under QAT). Single-seed variance in the quantization interaction is unmeasured; the
