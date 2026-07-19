@@ -1,3 +1,5 @@
 __pycache__/
 *.pyc
 runs_smoke*/
+runs/qwen4bit/
+*.safetensors
