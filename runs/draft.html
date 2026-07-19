@@ -247,6 +247,22 @@ $$\mathrm{CE}_s=\frac{\sum_t \mathbb{1}[s_t=s]\,\text{ce}_t}{\sum_t \mathbb{1}[s
 
 <figure><img src="runs/exp_h2.png"><figcaption>H2 — elasticity agrees with independent fp32 gradient importance (ρ=0.55, 42/42), disagreeing in a class-structured way</figcaption></figure>
 
+<p><b>Scope and outlook — a typing layer, not a tracer.</b> We are deliberate about what this probe is and is</p>
+<p>not. Elasticity is a <i>functional-typing</i> instrument: it labels a component as computation-bearing</p>
+<p>(precision-sensitive) or lookup-bearing (precision-robust), and its concentration measures localization</p>
+<p>vs. diffusion. It is <i>not</i> a general circuit-tracer — it says nothing about <i>what</i> a representation</p>
+<p>encodes (monosemantic vs. polysemantic) or <i>how</i> information flows through the residual stream, which are</p>
+<p>activation-space questions best answered by linear probing, activation patching, and sparse</p>
+<p>autoencoders. Its value is complementary and, we believe, unique: probing and patching can <i>locate</i> a</p>
+<p>circuit and describe <i>what</i> it represents, but cannot say whether that circuit <i>computes</i> or <i>looks up</i>;</p>
+<p>elasticity supplies exactly that label. We therefore propose a <b>locate-then-type</b> pipeline — use</p>
+<p>probing/patching to find and characterize a circuit, then overlay elasticity / leave-one-out</p>
+<p>un-quantization to type it — producing, for any located circuit, a joint <i>(causal-role, functional-type)</i></p>
+<p>description neither tool family gives alone. Preliminary residual-stream probes on controlled</p>
+<p>minimal-pair inputs are consistent with this division of labor (e.g. a content-matching fetch operation</p>
+<p>localizes to attention and types as precision-robust, while the arithmetic it feeds types as fragile);</p>
+<p>we leave a full locate-then-type circuit study to future work.</p>
+
 <h2>6. Predictions and limitations</h2>
 
 <p><b>Predictions (with their falsification protocol).</b> The mechanism yields four testable predictions for</p>

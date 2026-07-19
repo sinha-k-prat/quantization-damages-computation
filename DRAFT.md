@@ -241,6 +241,22 @@ from HAWQ.
 
 ![H2 — elasticity agrees with independent fp32 gradient importance (ρ=0.55, 42/42), disagreeing in a class-structured way](runs/exp_h2.png)
 
+**Scope and outlook — a typing layer, not a tracer.** We are deliberate about what this probe is and is
+not. Elasticity is a *functional-typing* instrument: it labels a component as computation-bearing
+(precision-sensitive) or lookup-bearing (precision-robust), and its concentration measures localization
+vs. diffusion. It is *not* a general circuit-tracer — it says nothing about *what* a representation
+encodes (monosemantic vs. polysemantic) or *how* information flows through the residual stream, which are
+activation-space questions best answered by linear probing, activation patching, and sparse
+autoencoders. Its value is complementary and, we believe, unique: probing and patching can *locate* a
+circuit and describe *what* it represents, but cannot say whether that circuit *computes* or *looks up*;
+elasticity supplies exactly that label. We therefore propose a **locate-then-type** pipeline — use
+probing/patching to find and characterize a circuit, then overlay elasticity / leave-one-out
+un-quantization to type it — producing, for any located circuit, a joint *(causal-role, functional-type)*
+description neither tool family gives alone. Preliminary residual-stream probes on controlled
+minimal-pair inputs are consistent with this division of labor (e.g. a content-matching fetch operation
+localizes to attention and types as precision-robust, while the arithmetic it feeds types as fragile);
+we leave a full locate-then-type circuit study to future work.
+
 ## 6. Predictions and limitations
 
 **Predictions (with their falsification protocol).** The mechanism yields four testable predictions for
