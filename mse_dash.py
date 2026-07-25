@@ -3,7 +3,7 @@ Aggregates runs_mse/lam_*/metrics.jsonl -> runs_mse/index.html (auto-refresh 5s)
 """
 import glob, json, os, time
 
-OUT = "runs_mse"; BASE_FLIPS = 20.11   # unconstrained fine-tune baseline (100% acc @ 20.11% flips)
+OUT = __import__("os").environ.get("MSE_OUT", "runs_mse"); BASE_FLIPS = 20.11   # unconstrained fine-tune baseline (100% acc @ 20.11% flips)
 
 def read(run):
     try: return [json.loads(l) for l in open(os.path.join(run, "metrics.jsonl"))]

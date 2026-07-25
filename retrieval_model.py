@@ -33,8 +33,15 @@ class QuantLinear(nn.Module):
         idx = d.argmin(-1); return torch.gather(s.codebook, 1, idx)
 
     def _ternary(s):
-        sc = s.weight.abs().mean(dim=1, keepdim=True).clamp(min=1e-8)   # per-row absmean scale
+        sc = getattr(s, "s0", None)                                     # frozen scale, if set
+        if sc is None:
+            sc = s.weight.abs().mean(dim=1, keepdim=True).clamp(min=1e-8)  # dynamic per-row absmean
         return sc * torch.clamp(torch.round(s.weight / sc), -1, 1)      # -> {-s, 0, +s}
+
+    def freeze_scale(s):
+        """pin the ternary row-scale at its current value: forward then depends on the weights
+        ONLY through their trits (closes the continuous scale-drift channel)."""
+        s.register_buffer("s0", s.weight.abs().mean(dim=1, keepdim=True).clamp(min=1e-8).detach().clone())
 
     def forward(s, x):
         if not s.quantize:
