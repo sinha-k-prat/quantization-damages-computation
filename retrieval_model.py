@@ -16,6 +16,7 @@ class QuantLinear(nn.Module):
         s.bias = nn.Parameter(torch.zeros(out_f)) if bias else None
         s.register_parameter("codebook", None)
         s.quantize = False                                    # <- un-cluster toggle
+        s.ternary = False                                     # <- fixed {-1,0,+1} clusters (BitNet b1.58)
         s.tag = ""                                            # "layerL.type" for ablation
 
     def enable_quant(s):
@@ -24,12 +25,26 @@ class QuantLinear(nn.Module):
             C = torch.quantile(s.weight.float(), qs, dim=1).t().contiguous()
         s.codebook = nn.Parameter(C.to(s.weight.dtype)); s.quantize = True
 
+    def enable_ternary(s):
+        s.ternary = True; s.quantize = True                   # fixed clusters {-1,0,+1}, no codebook to learn
+
     def _q(s):
         d = (s.weight[:, :, None] - s.codebook[:, None, :]).abs()
         idx = d.argmin(-1); return torch.gather(s.codebook, 1, idx)
 
+    def _ternary(s):
+        sc = s.weight.abs().mean(dim=1, keepdim=True).clamp(min=1e-8)   # per-row absmean scale
+        return sc * torch.clamp(torch.round(s.weight / sc), -1, 1)      # -> {-s, 0, +s}
+
     def forward(s, x):
-        if not s.quantize or s.codebook is None:
+        if not s.quantize:
+            return F.linear(x, s.weight, s.bias), x.new_zeros(())
+        if s.ternary:
+            Wq = s._ternary()
+            Wst = s.weight + (Wq - s.weight).detach()
+            vq = s.beta * F.mse_loss(s.weight, Wq.detach())            # commitment only (clusters fixed)
+            return F.linear(x, Wst, s.bias), vq
+        if s.codebook is None:
             return F.linear(x, s.weight, s.bias), x.new_zeros(())
         Wq = s._q(); Wst = s.weight + (Wq - s.weight).detach()
         out = F.linear(x, Wst, s.bias)
@@ -106,6 +121,10 @@ class MiniQwen(nn.Module):
     def enable_quant(s):
         for m in s.modules():
             if isinstance(m, QuantLinear): m.enable_quant()
+
+    def enable_ternary(s):
+        for m in s.modules():
+            if isinstance(m, QuantLinear): m.enable_ternary()
 
     def quant_layers(s): return [m for m in s.modules() if isinstance(m, QuantLinear)]
 

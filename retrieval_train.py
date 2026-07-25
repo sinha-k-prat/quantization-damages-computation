@@ -133,7 +133,11 @@ def main():
     vocab = D.build_vocab(0, 3000); tok = D.Tokenizer(vocab)
     cfg = config_M()
     control = MiniQwen(cfg, len(vocab), K)
-    target = copy.deepcopy(control); target.enable_quant()
+    target = copy.deepcopy(control)
+    if os.environ.get("TERNARY"):
+        target.enable_ternary(); print("TARGET = ternary {-1,0,+1} (BitNet b1.58)", flush=True)
+    else:
+        target.enable_quant()
     print(f"vocab {len(vocab)} · {sum(p.numel() for p in control.parameters())/1e6:.2f}M params", flush=True)
     optc = torch.optim.AdamW(control.parameters(), lr=LR, weight_decay=WD)
     opto = torch.optim.AdamW(target.parameters(), lr=LR, weight_decay=WD)

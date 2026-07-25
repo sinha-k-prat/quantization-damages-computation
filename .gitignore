@@ -3,3 +3,6 @@ __pycache__/
 runs_smoke*/
 runs/qwen4bit/
 *.safetensors
+runs_mse/*/ckpt.pt
+runs_ternary/ckpt_neg.pt
+runs_ternary/orig_trits.pt
