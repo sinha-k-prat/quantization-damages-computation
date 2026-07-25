@@ -6,3 +6,6 @@ runs/qwen4bit/
 runs_mse/*/ckpt.pt
 runs_ternary/ckpt_neg.pt
 runs_ternary/orig_trits.pt
+runs_mse2/
+runs_mse3/*/ckpt.pt
+runs_mse3/phase1.pt
