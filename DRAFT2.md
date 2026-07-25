@@ -211,8 +211,21 @@ computational circuits.**
 
 Dissecting the λ=30 circuit (3,592 flips; `exp_named_wires.py`, `exp_ddmin_l0.py`):
 
-**Layer-locality is exact.** Keeping only the flips in **layer 0** (plus one layer-5 gate neuron,
-2,896 flips total) preserves the full skill (0.986); the ~700 flips elsewhere contribute nothing.
+**Layer-locality is exact — and the layer works as a team.** Keeping only the flips in **layer 0**
+(plus one layer-5 gate neuron, 2,896 flips total) preserves the full skill (0.986); the ~700 flips
+elsewhere contribute nothing. Crucially, the circuit is not confined to one matrix: it spans **all
+seven of layer 0's matrices — attention (q, k, v, o) and MLP (gate, up, down) jointly**:
+
+| matrix | flips kept | functional role |
+|---|---|---|
+| L0.o | 647 | writing the attention result back to the residual |
+| L0.v | 482 | the payload — the "this token is negative" channel (hub: row 77) |
+| L0.k | 437 | addressing — what a number's neighbor looks like |
+| L0.down | 429 | MLP write-out |
+| L0.gate | 306 | MLP detection (hub: neuron 15) |
+| L0.q | 302 | query side of the back-look (hub: row 67) |
+| L0.up | 190 | MLP detection |
+| L5.gate (row 49) | ~100 | one late neuron shaping the answer emission |
 Mechanistically: "is my immediate predecessor `-`?" is an adjacent-token question, layer 0 is where
 adjacency is read, and because transformer weights are shared across positions the edit is a
 **stationary detector** — it runs at every position, fires only on the `-`-then-number pattern, and
@@ -223,7 +236,11 @@ untouched layers 1–5 process the stamped token with existing machinery.
 **Reproducible hubs.** Independent runs (λ=3 and λ=30) concentrate flips on the **same coordinates**:
 value row 77 (110/256 of its weights flipped at λ=30), query row 67, key rows 64/68, MLP neuron 15
 (its gate/up input rows *and* its down-projection output column — one neuron's read and write sides),
-and L5 gate neuron 49 (103/256). No full row or column flips anywhere.
+and L5 gate neuron 49 (103/256). No full row or column flips anywhere. One caveat on head
+attribution: under grouped-query attention the key edits (rows 64/68, kv-head 2) and the query edit
+(row 67, q-head 2) are **not automatically the same q/kv pairing**, so "a single dedicated head
+detects the minus" is plausible but unproven from weight coordinates alone; an attention-pattern
+probe (does one layer-0 head visibly attend number→`-`?) would settle it and is left to future work.
 
 **Necessary hubs, insufficient alone; collective redundancy.** The 603 hub flips alone: 0.000.
 Reverting only the hubs from the full circuit: 0.286 (necessary). Leave-one-out over all 2,896 flips:
