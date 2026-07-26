@@ -122,6 +122,22 @@ replica (d=256, 6 layers, 8/4 grouped-query attention [Ainslie et al. 2023], RoP
 SwiGLU, RMSNorm, tied embeddings), with 42 quantizable matrices (attention `q,k,v,o`; MLP
 `gate,up,down`).
 
+**Control validation.** Every effect in this paper is a difference against the control, so the control
+must itself be demonstrably competent — a weak or misconfigured baseline would make any "small gap"
+meaningless. Two safeguards apply. *Structurally*, the lockstep design means the control is not a
+separately tuned baseline that could be inadvertently sandbagged: it is the identical model, identical
+initialization, identical batch sequence, differing only in quantization — a pipeline misconfiguration
+would damage both arms equally and cancel out of every Δ we report. *Empirically*, the control
+saturates the task (Fig. below): train CE converges to 0.031; held-out OOD exact-match reaches
+**1.000**; per-skill CE at convergence is ≤ 0.049 on every sub-skill (and, consistent with the paper's
+thesis, even the fp32 control finds the computation skills hardest — 0.047–0.049 vs 0.0002–0.0003 for
+the lookup skills). On the real-model side, the fp Qwen2.5-0.5B baseline performs normally for its
+size (GSM8K exact-match 0.17, fluent low CE on all token classes), and the **8-bit condition is
+lossless** (all CE ratios 1.0) — a sanity check that the measurement pipeline itself introduces no
+damage, so 4-bit deltas are attributable to quantization rather than misconfiguration.
+
+![Control validation: the fp32 control converges, saturates held-out exact-match, masters every sub-skill; the fp Qwen baseline is healthy and 8-bit is lossless](runs/fig_control_validation.png)
+
 **Quantization.** Each matrix is compressed row-wise: for output row $i$, a learned codebook
 $C_i\in\mathbb{R}^k$ of $k$ centroids (initialized at $k$ empirical quantiles of the row) snaps each
 weight to its nearest centroid, $\hat W_{i,c}=C_{i,\,\arg\min_j|W_{i,c}-C_{i,j}|}$ ($k{=}4$ → 2 bits). A

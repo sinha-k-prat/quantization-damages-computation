@@ -135,6 +135,20 @@ Phase 1 trains only the single `-` embedding row (everything else frozen); phase
 continuous parameters — embeddings, biases, RMSNorm weights, and the ternary scales (pinned, so the
 forward depends on weights only through their trits) — and trains trits alone.
 
+**Control and substrate competence.** All flip-count claims presuppose that the base models are
+competent and that installation does not degrade them — otherwise "few edits" could simply mean
+"little was working to begin with." Both are verified (Fig. below). The ternary base models on *both*
+substrates were trained in lockstep against full-precision controls from identical initialization and
+batches; the controls converge to train CE ≈ 0.03 and reach **1.000 held-out OOD exact-match**, and
+the ternary targets match them (0.018 and 0.023 final CE; OOD 1.000) — the discrete models equal a
+demonstrably strong baseline, not a weak one. During skill installation, old-skill accuracy is
+reported for every run: **five of six sweep runs retain orig-acc = 1.000** (minimum 0.986, at the
+harshest penalty on substrate 1), so the reported flip counts were not purchased by sacrificing
+existing capabilities. The lockstep structure also immunizes the comparison against configuration
+error: any pipeline defect would afflict control and target identically and cancel from the contrast.
+
+![Control validation: both substrates' ternary targets match competent fp controls (train CE ~0.03, OOD exact-match 1.000), and all six installation runs preserve old skills at ~1.0](runs_ternary/fig_control_validation2.png)
+
 ## 4. A preliminary: breaking is easy, building is not
 
 Before the installation experiments, a destructive baseline on the trained ternary model calibrates
