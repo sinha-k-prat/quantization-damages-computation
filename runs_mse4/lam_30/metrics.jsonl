@@ -1,0 +1,15 @@
+{"step": 0, "sign": 0.057, "orig": 1.0, "flip": 0.267, "edit": 0.0965, "task": 1.596}
+{"step": 50, "sign": 0.971, "orig": 1.0, "flip": 0.142, "edit": 0.0261, "task": 0.196}
+{"step": 100, "sign": 0.986, "orig": 1.0, "flip": 0.116, "edit": 0.0221, "task": 0.179}
+{"step": 150, "sign": 1.0, "orig": 1.0, "flip": 0.112, "edit": 0.0208, "task": 0.144}
+{"step": 200, "sign": 0.986, "orig": 1.0, "flip": 0.107, "edit": 0.0202, "task": 0.118}
+{"step": 250, "sign": 1.0, "orig": 1.0, "flip": 0.107, "edit": 0.0195, "task": 0.106}
+{"step": 300, "sign": 0.986, "orig": 1.0, "flip": 0.102, "edit": 0.0189, "task": 0.123}
+{"step": 350, "sign": 1.0, "orig": 1.0, "flip": 0.108, "edit": 0.0189, "task": 0.107}
+{"step": 400, "sign": 1.0, "orig": 1.0, "flip": 0.103, "edit": 0.0187, "task": 0.105}
+{"step": 450, "sign": 1.0, "orig": 1.0, "flip": 0.099, "edit": 0.0186, "task": 0.074}
+{"step": 500, "sign": 1.0, "orig": 1.0, "flip": 0.097, "edit": 0.0184, "task": 0.073}
+{"step": 550, "sign": 1.0, "orig": 1.0, "flip": 0.093, "edit": 0.0183, "task": 0.068}
+{"step": 600, "sign": 1.0, "orig": 1.0, "flip": 0.099, "edit": 0.0188, "task": 0.068}
+{"step": 650, "sign": 0.986, "orig": 1.0, "flip": 0.089, "edit": 0.0181, "task": 0.065}
+{"step": 700, "sign": 1.0, "orig": 1.0, "flip": 0.091, "edit": 0.0184, "task": 0.066}

@@ -135,7 +135,12 @@ def main():
     control = MiniQwen(cfg, len(vocab), K)
     target = copy.deepcopy(control)
     if os.environ.get("TERNARY"):
-        target.enable_ternary(); print("TARGET = ternary {-1,0,+1} (BitNet b1.58)", flush=True)
+        target.enable_ternary()
+        if os.environ.get("EMBED_TERNARY"):
+            target.enable_ternary_embed()
+            print("TARGET = FULLY ternary: weights + biases + tied vocab embeddings (norms fp)", flush=True)
+        else:
+            print("TARGET = ternary {-1,0,+1} (BitNet b1.58)", flush=True)
     else:
         target.enable_quant()
     print(f"vocab {len(vocab)} · {sum(p.numel() for p in control.parameters())/1e6:.2f}M params", flush=True)

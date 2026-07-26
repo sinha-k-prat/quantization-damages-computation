@@ -50,7 +50,13 @@ class QuantLinear(nn.Module):
             Wq = s._ternary()
             Wst = s.weight + (Wq - s.weight).detach()
             vq = s.beta * F.mse_loss(s.weight, Wq.detach())            # commitment only (clusters fixed)
-            return F.linear(x, Wst, s.bias), vq
+            b = s.bias
+            if b is not None and getattr(s, "ternary_bias", False):    # fully-ternary mode: biases too
+                sb = b.abs().mean().clamp(min=1e-8)
+                bq = sb * torch.clamp(torch.round(b / sb), -1, 1)
+                vq = vq + s.beta * F.mse_loss(b, bq.detach())
+                b = b + (bq - b).detach()
+            return F.linear(x, Wst, b), vq
         if s.codebook is None:
             return F.linear(x, s.weight, s.bias), x.new_zeros(())
         Wq = s._q(); Wst = s.weight + (Wq - s.weight).detach()
@@ -133,6 +139,20 @@ class MiniQwen(nn.Module):
         for m in s.modules():
             if isinstance(m, QuantLinear): m.enable_ternary()
 
+    def enable_ternary_embed(s):
+        """fully-ternary mode: embedding table (tied encoder+decoder vocab) and biases also
+        snap to {-scale, 0, +scale} per row via STE; only RMSNorm weights stay continuous."""
+        s.ternary_embed = True
+        for m in s.quant_layers(): m.ternary_bias = True
+
+    def _embed_matrix(s):
+        W = s.embed.weight
+        if getattr(s, "ternary_embed", False):
+            sc = W.abs().mean(1, keepdim=True).clamp(min=1e-8)         # per-vocab-row absmean scale
+            Wq = sc * torch.clamp(torch.round(W / sc), -1, 1)
+            return W + (Wq - W).detach(), 0.25 * F.mse_loss(W, Wq.detach())
+        return W, W.new_zeros(())
+
     def quant_layers(s): return [m for m in s.modules() if isinstance(m, QuantLinear)]
 
     def set_quant(s, pred):
@@ -141,10 +161,11 @@ class MiniQwen(nn.Module):
             if m.codebook is not None: m.quantize = bool(pred(m.tag))
 
     def forward(s, idx):
-        x = s.embed(idx); vq = x.new_zeros(()); T = idx.shape[1]
+        E, vq = s._embed_matrix()                                      # ternary (or fp) tied vocab
+        x = F.embedding(idx, E); T = idx.shape[1]
         cos, sin = s.cos[:T], s.sin[:T]
         for b in s.blocks: x, v = b(x, cos, sin); vq = vq + v
-        return s.head(s.norm(x)), vq
+        return F.linear(s.norm(x), E), vq                              # decoder head uses same E
 
 
 def config_M():

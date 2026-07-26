@@ -207,6 +207,27 @@ zero accuracy cost. **(iii)** The contrast between 34-token (embeddings suffice,
 **token-wise memorizable knowledge fits in lookup channels; relational composition demands
 computational circuits.**
 
+**Substrate robustness: a fully discrete network gives the same answer.** As a robustness check we
+repeated the entire pipeline on a substrate where the **embedding table (tied encoder and decoder
+vocabulary) and all biases are also ternarized** — only RMSNorm weights remain continuous. The base
+model, retrained from scratch under this regime, again matches its full-precision lockstep control
+(final train CE 0.023 vs 0.031; OOD exact-match 1.000 for both), extending the 1.58-bit-parity
+observation to the vocabulary itself. The skill-installation results are essentially unchanged:
+
+| λ_e | fp-embedding substrate | fully-ternary substrate |
+|---|---|---|
+| 0 | 100%/100% @ 8.21% (351k) | 100%/100% @ 7.76% (332k) |
+| 3 | 100%/100% @ 0.214% (~9.2k) | 100%/100% @ 0.244% (~10.4k) |
+| 30 | 97.1%/98.6% @ 0.084% (~3.6k) | 100%/100% @ 0.091% (~3.9k) |
+
+Phase 1 again yields 0.000 (a single *ternary* `-` vector cannot represent composition; the learned
+word is a sparse discrete code — 124 of 256 trits are zero). The symbolic cost of the circuit is
+therefore **a property of the skill, not of the vocabulary's precision** (within ~10% across
+substrates). One suggestive difference — the fully-ternary substrate reaches *full* accuracy at
+λ=30 (~3.9k flips) where the fp-embedding substrate degraded (97.1% at ~3.6k) — is consistent with a
+quantized vocabulary presenting a cleaner, coarser interface for the circuit to read, but at a single
+seed we do not press the claim.
+
 ## 7. Anatomy of the installed circuit
 
 Dissecting the λ=30 circuit (3,592 flips; `exp_named_wires.py`, `exp_ddmin_l0.py`):

@@ -9,3 +9,6 @@ runs_ternary/orig_trits.pt
 runs_mse2/
 runs_mse3/*/ckpt.pt
 runs_mse3/phase1.pt
+runs_ternary2/ckpt.pt
+runs_mse4/*/ckpt.pt
+runs_mse4/phase1.pt
