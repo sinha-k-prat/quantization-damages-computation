@@ -41,3 +41,11 @@ COMPUTED QUANTITY (T1 counts to unseen positions; T4 ordinal stays 1st-3rd), NOT
 Mechanism half complete on toy. NeurIPS main ~5% as-is (scale/single-seed/no-real-quantizer/diagnostic-not-method);
 strong workshop. Bridge to main track = real-model replication (Pythia-160M/Qwen2-0.5B + GPTQ). TODO: multi-seed
 error bars (4a), bit-width sweep (4b), periodic-ckpt+resume in trainer, real-model replication, CoT-as-robustness test.
+
+## Real-model replication (Qwen2.5-0.5B on GSM8K, measured 2026-07-19, `qwen_gptq.py`)
+Per-channel uniform RTN quantization; token types from `gsm8k_tag.py` (computation/copy/language).
+- 8-bit: LOSSLESS sanity check — all per-type CE ratios 1.0; EM 0.25 vs fp 0.12 (small-N, within noise).
+- 4-bit (40 examples loss / 12 EM): fp CE computation 0.211, copy 0.393, language 1.113; quant CE
+  0.956 / 1.000 / 1.831 → ratios computation 4.5x > copy 2.5x > language 1.6x. GSM8K exact-match:
+  fp 0.17 -> 4-bit 0.08.
+- Earlier crude quantile-VQ (superseded, ratio-pattern only): 12.8x / 6.4x / 4.1x; EM collapsed to 0.

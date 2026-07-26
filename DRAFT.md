@@ -62,6 +62,33 @@ six reasoning sub-skills. Our contributions:
 | Competing recall hypothesis | Falsified — recall+bind is the *most* robust, not the least | §4.4 (E-a/E-b) |
 | Reusable probe? | Elasticity separates computation from lookup; agrees with fp32 gradients | §5 (H1/H2) |
 
+## Experimental timeline (a reader's map)
+
+*The complete pipeline in execution order, for a reader with no prior context. Each stage states what
+was done, what it established, and where the details live. Stages 7 and 9 are deliberate
+self-checks — one refuted our own hypothesis, one ruled out a confound. Legend: F1–F4 are the
+paper's findings, E-a/E-b its hypothesis-test experiments, H1/H2 its probe experiments; every "×"
+figure is the ratio of quantized-to-control cross-entropy.*
+
+| # | Stage | What was done | What it established | Where |
+|---|---|---|---|---|
+| 1 | **Define the task** | Six dissociable sub-skills (copy, latent-property recall, type filter, counting, comparison, relative position) over object/number lists; skill-labeled scratchpad traces; 5-level length curriculum; held-out longer lists for OOD | Loss becomes decomposable by skill × complexity — the measurement the whole paper rests on | §3, `retrieval_data.py` |
+| 2 | **Build the substrate** | 4.32M Qwen2-replica; per-row learned-codebook quantizer (k=4 → 2-bit) with straight-through training that keeps full-precision weights alive | Enables the free *un-cluster* (leave-one-out un-quantize) causal probe used throughout | §3, `retrieval_model.py` |
+| 3 | **Train control + 2-bit target in lockstep** | One fp32 model, deep-copied, copy quantized; both trained 10k steps on identical batches from identical init | Causal attribution: every Δ is quantization's effect; control saturates the task (OOD exact-match 1.000) | §3, control-validation figure |
+| 4 | **Split the loss by skill (F1)** | Per-skill penalty at convergence | Computation damaged (relative 1.61×, content 1.25×); lookup free (≤0.83×) | §4.1 |
+| 5 | **Localize to tokens (F2)** | Per-token gap around the position-emitting token | Damage is surgical: it sits on the computed-quantity token; downstream symbols are free | §4.3, `exp1a` |
+| 6 | **Sweep input length (F3)** | Gap at that token vs list length | The mechanism: regularizer in-distribution, brittle out-of-distribution, crossing at the training boundary | §4.2, `exp1b` |
+| 7 | **Test a rival hypothesis (E-a/E-b)** | "Quantization breaks recall-and-bind" — tested, then re-tested with length-matched controls | **Refuted our own conjecture**; the extrapolation account survived the controlled contrast | §4.4 |
+| 8 | **Localize to components (F4)** | Un-cluster by weight class + leave-one-out | Fragility concentrates in the value/output path, early layers | §4.3, `exp_uncluster` |
+| 9 | **Rule out compressibility (confound check)** | Measured quantization error per class | Error is uniform (0.32–0.34) — fragility is functional *sensitivity*, not harder-to-compress weights | §4.3, `runs/exp_cluster_tightness.png` (analysis run inline; figure is the artifact) |
+| 10 | **Turn damage into a probe (H1)** | Crush each of 42 components alone to 1-bit; map the loss | Bit-width elasticity fingerprints compute vs lookup components (35/42; not a magnitude artifact, r=−0.15) | §5, `exp_h1` |
+| 11 | **Validate the probe independently (H2)** | Gradient saliency on the *fp control* (no quantization anywhere) | Agrees directionally 42/42, ρ=0.55 — correlated but not redundant with gradients | §5, `exp_h2` |
+| 12 | **Replicate on a real model** | GSM8K solutions token-tagged computation/copy/language; Qwen2.5-0.5B quantized: 8-bit (sanity: lossless) and 4-bit | Real-model F1: computation 4.5× > copy 2.5× > language 1.6×; EM 0.17→0.08; pattern replicates across two quantizers | §6, `qwen_gptq.py`, `gsm8k_tag.py` |
+| 13 | **Validate the controls** | Absolute-performance figures for both control arms | The baselines saturate their tasks; lockstep design cancels misconfiguration from every Δ | §3 |
+
+*(The 1.58-bit/ternary extreme of the bit-width axis is developed in the companion paper, `DRAFT2.md`,
+where the fully-discrete substrate becomes the object of study.)*
+
 ## 2. Related Work
 
 **Quantization methods and their evaluation.** Post-training quantization scales weights to low bit-width

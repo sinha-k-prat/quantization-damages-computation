@@ -71,6 +71,24 @@ has an exact integer answer. This paper asks and answers three questions on a te
 | Circuit shape | One layer (+1 late neuron) = 100% of skill; recurring hubs; no single flip necessary | §7 |
 | Can it be minimized further? | To ~1.3k only by overfitting (held-out 0.986→0.643): minimal ≠ robust | §7 |
 
+## Experimental timeline (a reader's map)
+
+*The pipeline in execution order for a reader with no prior context. The sequence is deliberately
+preserved — including the two rounds our own controls overturned — because the corrections are the
+method. Stages 4–6 are the paper's three acts.*
+
+| # | Stage | What was done | What it established | Where |
+|---|---|---|---|---|
+| 1 | **Train the ternary substrate** | Same retrieval task as the companion paper; BitNet-style ternary target ({−1,0,+1}, absmean scale, STE) trained 10k steps in lockstep against an fp control | A 1.58-bit model matches a competent fp control (OOD exact-match 1.000 both) — the substrate for everything below | §3, control-validation figure |
+| 2 | **Break-side preliminary** | Rank single sign-flips by first-order gradient on one correct answer | 12 targeted flips destroy the answer; 400 random flips do nothing — robust to noise, fragile to targeting; breaking ≪ building | §4, `exp_flip` |
+| 3 | **Augment the task** | Add negative numbers + a new skill ("find the first negative") — initially as 34 new vocabulary tokens | The installation target: a skill absent from the base model | §3, §5 |
+| 4 | **Act 1 — naive edit-penalty sweep** | KL edit-cost λ swept 0→30, everything trainable | *Apparent* triumph: 100%/100% at just 284 flips | §5 |
+| 5 | **Act 2 — forensics** | Cross-run flip overlap; revert-all-flips control; embedding-graft tests | The 284 are optimizer noise (15–25% overlap; zero-flip revert changes nothing); the skill lives in the **embedding table** — learning laundered into the unpriced channel | §5, `exp_flip_overlap`, `exp_flip_min`, `exp_embed_only` |
+| 6 | **Act 3 — leak-proof redesign** | ONE new token (`-`), compositional negatives (magnitudes share the positive range); freeze embeddings, biases, norms, and quantization scales; phase 1 = vocabulary only, phase 2 = trits only | Vocabulary alone: 0.000 (composition is not memorizable). True cost: ~9.2k flips at 100%/100% (λ=3); frontier cracks below ~4k; 38× compression vs unconstrained | §6, `retrieval_data_sign.py`, `finetune_mse3.py` |
+| 7 | **Anatomy of the circuit** | Structural diff (rows/columns/hubs); keep-only/revert-only ladders; leave-one-out; ddmin pruning | Layer-0-local (one layer + one late neuron = 100% of skill); reproducible hubs, necessary-but-insufficient; **no single flip necessary** (0/2,896); minimizing to 1.3k overfits (held-out 0.64) — minimal ≠ robust | §7, `exp_named_wires`, `exp_ddmin_l0` |
+| 8 | **Substrate robustness — quantize the vocabulary too** | Retrain the base with ternary embeddings (tied encoder+decoder) and ternary biases — only normalizers continuous; repeat the full installation pipeline | Fully-discrete base again matches fp control; installation cost essentially unchanged (10.4k / 3.9k, flip % against the same 4.28M weight-trit denominator) — the symbolic cost measures the *skill*, not the substrate's precision; the learned `-` word is a sparse ternary code (124/256 zeros) | §6, `finetune_mse4.py` |
+| 9 | **Validate the controls** | Absolute performance of both fp controls; old-skill retention across all six installation runs | Controls saturate; orig-acc ≈ 1.0 in every run — flip counts were not bought by degrading the base model | §3 |
+
 ## 2. Related work
 
 **Ternary and low-bit training.** BitNet and BitNet b1.58 [Wang et al. 2023; Ma et al. 2024] train
